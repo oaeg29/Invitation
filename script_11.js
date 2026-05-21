@@ -2780,10 +2780,37 @@ function resolveTopBarColorSyncTintState(
   }
 
   const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
-  let activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
-    ? Math.floor(swipeState.activeSectionIndex)
-    : -1;
-  let activeSectionSource = 'swipe-state';
+  const liteModeActive = isLiteModeActive();
+  let activeSectionIndex = -1;
+  let activeSectionSource = liteModeActive ? 'lite-visual-section' : 'swipe-state';
+  let activeSectionIdFromVisualState = '';
+  if (liteModeActive) {
+    const visualSectionState = resolveLiteTopBarColorSyncVisualSectionIndex(
+      swipeConfig,
+      swipeState,
+      currentFrame,
+    );
+    activeSectionIndex = Number.isFinite(Number(visualSectionState && visualSectionState.index))
+      ? Math.floor(Number(visualSectionState.index))
+      : -1;
+    activeSectionSource = (
+      visualSectionState
+      && typeof visualSectionState.source === 'string'
+      && visualSectionState.source.trim().length > 0
+    )
+      ? visualSectionState.source.trim()
+      : 'lite-visual-section';
+    activeSectionIdFromVisualState = (
+      visualSectionState
+      && typeof visualSectionState.sectionId === 'string'
+    )
+      ? visualSectionState.sectionId.trim()
+      : '';
+  } else {
+    activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
+      ? Math.floor(swipeState.activeSectionIndex)
+      : -1;
+  }
   if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
     activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
     activeSectionSource = 'closest-frame-fallback';
@@ -2807,17 +2834,24 @@ function resolveTopBarColorSyncTintState(
     };
   }
   const activeSection = sections[activeSectionIndex];
+  const activeSectionIdResolved = (
+    activeSection
+    && typeof activeSection.id === 'string'
+    && activeSection.id.trim().length > 0
+  )
+    ? activeSection.id.trim()
+    : activeSectionIdFromVisualState;
   const activeColor = resolveTopBarColorSyncColorBySectionId(
-    activeSection && activeSection.id,
+    activeSectionIdResolved,
     topBarColorSyncConfig,
   );
   if (typeof activeColor === 'string' && activeColor.length > 0) {
     topBarTintDebugLog('resolve-steady', {
       phase: 'steady',
-      liteMode: isLiteModeActive(),
+      liteMode: liteModeActive,
       frame: currentFrame,
       activeSectionIndexResolved: activeSectionIndex,
-      activeSectionIdResolved: activeSection && activeSection.id,
+      activeSectionIdResolved,
       activeSectionSource,
       activeColor,
       keepPrevious: false,
@@ -2832,10 +2866,10 @@ function resolveTopBarColorSyncTintState(
   }
   topBarTintDebugLog('resolve-steady', {
     phase: 'steady',
-    liteMode: isLiteModeActive(),
+    liteMode: liteModeActive,
     frame: currentFrame,
     activeSectionIndexResolved: activeSectionIndex,
-    activeSectionIdResolved: activeSection && activeSection.id,
+    activeSectionIdResolved,
     activeSectionSource,
     activeColor,
     keepPrevious: true,
@@ -3048,10 +3082,12 @@ function shouldEnableSafariTopTintShim() {
   if (config.enabled !== true && override !== true) {
     return false;
   }
-  if (config.iosOnly !== false && !isLikelyIOSDevice()) {
+  const isIOSDevice = isLikelyIOSDevice();
+  if (config.iosOnly !== false && !isIOSDevice) {
     return false;
   }
-  if (config.iosMinMajor > 0) {
+  const shouldBypassIosMinMajorForLite = isIOSDevice && isLiteModeActive();
+  if (config.iosMinMajor > 0 && !shouldBypassIosMinMajorForLite) {
     const major = parseIOSMajorVersion();
     if (!Number.isFinite(major) || major < config.iosMinMajor) {
       return false;
