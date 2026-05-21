@@ -18,10 +18,11 @@
   liteMode: {
     enabled: true,
     queryParamKey: 'lite',
-    splashHintDelayMs: 4500,
+    splashHintDelayMs: 4800,
     splashHintRequireHeroNotReady: false,
     splashHintText: 'slow speeds?  tap here for a simpler experience',
     splashHintColor: null,
+    renderDprCap: 1.55, // lite-mode DPR ceiling (set <1 only for aggressive testing)
     heroReadyTimeoutMs: 0, // 0 = splashHintDelayMs + built-in safety margin
     splashHintTestStall: {
       enabled: false, // testing-only: keep splash visible and hold hero loading in full mode
@@ -34,7 +35,7 @@
     
       hero: {
         webm: './hero_final_keyed_lite.webm',
-        webmFallback: './hero_final_keyed.webm',
+        webmFallback: './hero_final_keyed_lite.webm',
         mov: './hero_final_foriOS_lite.mov',
         movFallback: './hero_final_foriOS.mov',
       },
@@ -52,9 +53,9 @@
           movFallback: './smallGrowBloom_upper_foriOS.mov',
         },
         combinedVideo: {
-          webm: './foliage_vid_combined.webm',
+          webm: './foliage_vid_combined_lite.webm',
           webmFallback: './foliage_vid_combined.webm',
-          mov: './foliage_vid_combined.mov',
+          mov: './foliage_vid_combined_lite.mov',
           movFallback: './foliage_vid_combined.mov',
         },
       },

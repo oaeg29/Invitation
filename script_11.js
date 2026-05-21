@@ -529,6 +529,9 @@ function resolveLiteModeConfig() {
     splashHintColor: (typeof safe.splashHintColor === 'string' && safe.splashHintColor.trim().length > 0)
       ? safe.splashHintColor.trim()
       : null,
+    renderDprCap: Number.isFinite(Number(safe.renderDprCap))
+      ? clamp(Number(safe.renderDprCap), 0.1, 4)
+      : 1,
     heroReadyTimeoutMs: Number.isFinite(Number(safe.heroReadyTimeoutMs))
       ? Math.max(0, Number(safe.heroReadyTimeoutMs))
       : 0,
@@ -699,10 +702,18 @@ function applyLiteModeConfigOverrides() {
   }
   // Cap render DPR to 1 to save fillrate on weaker GPUs.
   if (CONFIG.renderDpr && typeof CONFIG.renderDpr === 'object') {
+    const liteConfig = resolveLiteModeConfig();
+    const liteDprCap = (
+      liteConfig
+      && Number.isFinite(Number(liteConfig.renderDprCap))
+      && Number(liteConfig.renderDprCap) > 0
+    )
+      ? Number(liteConfig.renderDprCap)
+      : 1;
     CONFIG.renderDpr.enabled = true;
     CONFIG.renderDpr.mobileOnly = false;
-    CONFIG.renderDpr.mobileCap = 1;
-    CONFIG.renderDpr.desktopCap = 1;
+    CONFIG.renderDpr.mobileCap = liteDprCap;
+    CONFIG.renderDpr.desktopCap = liteDprCap;
   }
 }
 
@@ -729,6 +740,13 @@ function applyLiteModeCanvasVisibility() {
     }
     node.style.display = 'none';
     node.style.visibility = 'hidden';
+  }
+  if (heroHintCanvas && heroHintCanvas.style) {
+    // Lite-mode arrow hint renders on this dedicated canvas; keep it paint-visible.
+    heroHintCanvas.style.display = 'block';
+    heroHintCanvas.style.visibility = 'visible';
+    heroHintCanvas.style.zIndex = '0';
+    heroHintCanvas.style.pointerEvents = 'none';
   }
 }
 
@@ -2415,17 +2433,18 @@ function resolveTopBarColorSyncTintState(
     };
   }
 
-  // Keep tint sampling aligned with what is visually on screen by resolving
-  // section from the current hero frame first (same basis used by section styling).
   const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
-  let activeSectionIndex = findActiveSwipeSectionIndexForFrame(swipeConfig, currentFrame);
-  if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
+  let activeSectionIndex = -1;
+  if (isLiteModeActive()) {
+    // In lite mode, keep top tint in lockstep with what is currently on screen.
+    activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
+  } else {
     activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
       ? Math.floor(swipeState.activeSectionIndex)
       : -1;
-  }
-  if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
-    activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
+    if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
+      activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
+    }
   }
   if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
     return {
@@ -11597,7 +11616,15 @@ function resolveEffectiveRenderDpr() {
     ? Math.max(0.1, window.devicePixelRatio)
     : 1;
   if (isLiteModeActive()) {
-    return Math.max(0.1, Math.min(rawDpr, 1));
+    const liteConfig = resolveLiteModeConfig();
+    const liteDprCap = (
+      liteConfig
+      && Number.isFinite(Number(liteConfig.renderDprCap))
+      && Number(liteConfig.renderDprCap) > 0
+    )
+      ? Number(liteConfig.renderDprCap)
+      : 1;
+    return Math.max(0.1, Math.min(rawDpr, liteDprCap));
   }
   const renderDprConfig = resolveRenderDprConfig();
   if (renderDprConfig.enabled !== true) {
@@ -23327,6 +23354,12 @@ function renderScene(options = {}) {
     if (!isLiteModeActive()) {
       cancelFlowerInteractionFrame();
     }
+    if (isLiteModeActive()) {
+      applyLiteModeCanvasVisibility();
+      if (heroHintCanvas && heroHintCtx) {
+        heroHintCtx.clearRect(0, 0, STATE.viewportWidth, STATE.viewportHeight);
+      }
+    }
     const heroPlaybackGateConfig = resolveHeroPlaybackGateConfig();
     const heroPlaybackFrame = getCurrentHeroVideoFrame(heroPlaybackGateConfig);
     const overlayNowMs = performance.now();
@@ -23349,12 +23382,14 @@ function renderScene(options = {}) {
       });
       syncCenterOverlayImageLayer(pausedNowMs, pausedFrame);
       syncSection1LabelLayer(pausedNowMs);
+      drawOpenButtonArrowHint(heroPlaybackGateConfig, pausedNowMs, heroHintCtx || resolveOpenButtonArrowDrawTargetCtx());
       syncSwipeSectionsScrollHintLayer(pausedNowMs);
       if (isLiteModeActive()) {
         syncFlowerInteractionLoop();
       }
       return;
     }
+    drawOpenButtonArrowHint(heroPlaybackGateConfig, overlayNowMs, heroHintCtx || resolveOpenButtonArrowDrawTargetCtx());
     syncSwipeSectionsScrollHintLayer(overlayNowMs);
     if (isLiteModeActive()) {
       syncFlowerInteractionLoop();
