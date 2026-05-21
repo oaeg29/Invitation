@@ -367,6 +367,13 @@ const VIEWPORT_LAYOUT_DEBUG_QUERY_PARAM = 'viewportDebug';
 const VIEWPORT_LAYOUT_SCROLL_NUDGE_QUERY_PARAM = 'viewportScrollNudge';
 const VIEWPORT_LAYOUT_TOP_TINT_SHIM_QUERY_PARAM = 'viewportTopTintShim';
 const VIEWPORT_LAYOUT_TOP_TINT_EXPERIMENT_QUERY_PARAM = 'viewportTopTintExperiment';
+const TOP_BAR_TINT_DEBUG_QUERY_PARAM = 'topTintDebug';
+const TOP_BAR_TINT_DEBUG_QUERY_PARAM_ALIAS = 'tintDebug';
+const TOP_BAR_TINT_DEBUG_ONLY_DOM_PHASES = true;
+const TOP_BAR_TINT_DEBUG_ALLOWED_KEYS = new Set([
+  'apply-dom',
+  'post-theme-sync-dom',
+]);
 const VIEWPORT_LAYOUT_MODE_DEBUG_BUTTON_ID = 'viewportModeDebugToggle';
 const VIEWPORT_LAYOUT_RELATIVE_ADJUSTABLE_CONTROLS_ID = 'viewportRelativeAdjustableControls';
 const VIEWPORT_LAYOUT_SCROLL_STAGE_ID = 'ios-scroll-stage';
@@ -1416,6 +1423,10 @@ let loadingScreenTopTintOverride = '';
 let themeColorMetaElement = null;
 let lastThemeColor = '';
 let pageBackgroundGradientStops = [];
+const topBarTintDebugRuntime = {
+  lastLogMsByKey: {},
+  lastSignatureByKey: {},
+};
 let viewportScrollNudgeApplied = false;
 let viewportBodyFixedOriginalInlineStyles = null;
 let viewportBodyFixedStylesApplied = false;
@@ -2314,6 +2325,7 @@ function resolvePageBackgroundGradientStopsFromCssVariables() {
 function resolveTopBarColorSyncConfig(configCandidate = CONFIG && CONFIG.topBarColorSync) {
   const safeConfig = isPlainConfigObject(configCandidate) ? configCandidate : {};
   const bySectionIdRaw = isPlainConfigObject(safeConfig.bySectionId) ? safeConfig.bySectionId : {};
+  const debugRaw = isPlainConfigObject(safeConfig.debug) ? safeConfig.debug : {};
   const bySectionId = {};
   const keys = Object.keys(bySectionIdRaw);
   for (let i = 0; i < keys.length; i += 1) {
@@ -2336,10 +2348,211 @@ function resolveTopBarColorSyncConfig(configCandidate = CONFIG && CONFIG.topBarC
     safeConfig.syncThemeColor === true
     || safeConfig.syncThemeColor === false
   );
+  const debugThrottleMs = Number.isFinite(Number(debugRaw.throttleMs))
+    ? Math.max(0, Number(debugRaw.throttleMs))
+    : 120;
   return {
     enabled: safeConfig.enabled === true,
     bySectionId,
+    debug: {
+      enabled: debugRaw.enabled === true,
+      throttleMs: debugThrottleMs,
+    },
     syncThemeColor: hasSyncThemeColorOverride ? safeConfig.syncThemeColor : null,
+  };
+}
+
+function isTruthyQueryFlagValue(rawValue) {
+  const normalized = String(rawValue || '').trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function readTopBarTintDebugFlagFromSearchParams() {
+  if (!window || !window.location || typeof window.location.search !== 'string') {
+    return false;
+  }
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    return (
+      isTruthyQueryFlagValue(searchParams.get(TOP_BAR_TINT_DEBUG_QUERY_PARAM))
+      || isTruthyQueryFlagValue(searchParams.get(TOP_BAR_TINT_DEBUG_QUERY_PARAM_ALIAS))
+    );
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isTopBarTintDebugEnabled(topBarColorSyncConfig = resolveTopBarColorSyncConfig()) {
+  const configEnabled = Boolean(
+    topBarColorSyncConfig
+    && topBarColorSyncConfig.debug
+    && topBarColorSyncConfig.debug.enabled === true
+  );
+  return configEnabled || readTopBarTintDebugFlagFromSearchParams();
+}
+
+function topBarTintDebugLog(
+  throttleKey,
+  payload = {},
+  options = {},
+  topBarColorSyncConfig = resolveTopBarColorSyncConfig(),
+) {
+  let safeOptions = options;
+  let safeTopBarColorSyncConfig = topBarColorSyncConfig;
+  // Backward compatibility: older call sites passed config as the 3rd arg.
+  if (
+    arguments.length <= 3
+    && safeOptions
+    && typeof safeOptions === 'object'
+    && (
+      safeOptions.enabled !== undefined
+      || safeOptions.bySectionId !== undefined
+      || safeOptions.syncThemeColor !== undefined
+      || safeOptions.debug !== undefined
+    )
+  ) {
+    safeTopBarColorSyncConfig = safeOptions;
+    safeOptions = {};
+  }
+  if (!safeOptions || typeof safeOptions !== 'object') {
+    safeOptions = {};
+  }
+  if (!isTopBarTintDebugEnabled(safeTopBarColorSyncConfig)) {
+    return;
+  }
+  const debugConfig = (
+    safeTopBarColorSyncConfig
+    && safeTopBarColorSyncConfig.debug
+    && typeof safeTopBarColorSyncConfig.debug === 'object'
+  )
+    ? safeTopBarColorSyncConfig.debug
+    : {};
+  const throttleMs = Number.isFinite(Number(debugConfig.throttleMs))
+    ? Math.max(0, Number(debugConfig.throttleMs))
+    : 120;
+  const nowMs = (
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+  )
+    ? performance.now()
+    : Date.now();
+  const safeKey = typeof throttleKey === 'string' && throttleKey.trim().length > 0
+    ? throttleKey.trim()
+    : 'default';
+  if (TOP_BAR_TINT_DEBUG_ONLY_DOM_PHASES === true && !TOP_BAR_TINT_DEBUG_ALLOWED_KEYS.has(safeKey)) {
+    return;
+  }
+  const signature = JSON.stringify(payload);
+  const lastSignature = topBarTintDebugRuntime.lastSignatureByKey[safeKey];
+  const lastLogMs = Number(topBarTintDebugRuntime.lastLogMsByKey[safeKey]);
+  const force = safeOptions.force === true;
+  const timeSinceLastLogMs = Number.isFinite(lastLogMs)
+    ? nowMs - lastLogMs
+    : Number.POSITIVE_INFINITY;
+  const shouldThrottleByTime = !force && timeSinceLastLogMs < throttleMs;
+  const shouldThrottle = (
+    shouldThrottleByTime
+    || (
+      !force
+      && signature === lastSignature
+      && Number.isFinite(lastLogMs)
+      && timeSinceLastLogMs < throttleMs
+    )
+  );
+  if (shouldThrottle) {
+    return;
+  }
+  topBarTintDebugRuntime.lastSignatureByKey[safeKey] = signature;
+  topBarTintDebugRuntime.lastLogMsByKey[safeKey] = nowMs;
+  console.log(`[TopBarTintDebug:${safeKey}]`, payload);
+}
+
+function tryGetRuntimeStateForTopTintDebug() {
+  try {
+    if (STATE && typeof STATE === 'object') {
+      return STATE;
+    }
+  } catch (_error) {
+    // STATE is not initialized yet during early boot.
+  }
+  return null;
+}
+
+function resolveTopBarTintDomDebugSnapshot(extra = {}) {
+  const root = document && document.documentElement ? document.documentElement : null;
+  const body = document && document.body ? document.body : null;
+  const shim = (
+    safariTopTintShimElement
+    || (document && typeof document.getElementById === 'function'
+      ? document.getElementById(SAFARI_TOP_TINT_SHIM_ID)
+      : null)
+  );
+  const rootComputed = (
+    root
+    && typeof window !== 'undefined'
+    && typeof window.getComputedStyle === 'function'
+  )
+    ? window.getComputedStyle(root)
+    : null;
+  const bodyComputed = (
+    body
+    && typeof window !== 'undefined'
+    && typeof window.getComputedStyle === 'function'
+  )
+    ? window.getComputedStyle(body)
+    : null;
+  const shimComputed = (
+    shim
+    && typeof window !== 'undefined'
+    && typeof window.getComputedStyle === 'function'
+  )
+    ? window.getComputedStyle(shim)
+    : null;
+  const themeMeta = (
+    document
+    && typeof document.querySelector === 'function'
+  )
+    ? document.querySelector(`meta[name="${THEME_COLOR_META_NAME}"]`)
+    : null;
+  const runtimeState = tryGetRuntimeStateForTopTintDebug();
+  const swipeState = runtimeState && runtimeState.swipeSections ? runtimeState.swipeSections : null;
+  return {
+    liteMode: isLiteModeActive(),
+    viewportLayoutMode: runtimeState && runtimeState.viewportLayoutMode
+      ? runtimeState.viewportLayoutMode
+      : '',
+    swipeStateActiveSectionIndex: (
+      swipeState && Number.isFinite(swipeState.activeSectionIndex)
+    )
+      ? Math.floor(swipeState.activeSectionIndex)
+      : -1,
+    swipeStateTransitioning: Boolean(swipeState && swipeState.isTransitioning === true),
+    sectionStylingDatasetActiveSectionId: (
+      sectionStylingBackgroundLayer
+      && sectionStylingBackgroundLayer.dataset
+      && typeof sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId === 'string'
+    )
+      ? sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId.trim()
+      : '',
+    safariTopTintVarInline: (
+      root && root.style && typeof root.style.getPropertyValue === 'function'
+    )
+      ? String(root.style.getPropertyValue(SAFARI_TOP_TINT_CSS_VAR) || '').trim()
+      : '',
+    safariTopTintVarComputed: (
+      rootComputed && typeof rootComputed.getPropertyValue === 'function'
+    )
+      ? String(rootComputed.getPropertyValue(SAFARI_TOP_TINT_CSS_VAR) || '').trim()
+      : '',
+    htmlBgComputed: rootComputed ? rootComputed.backgroundColor : null,
+    bodyBgComputed: bodyComputed ? bodyComputed.backgroundColor : null,
+    shimDisplayComputed: shimComputed ? shimComputed.display : null,
+    shimBgComputed: shimComputed ? shimComputed.backgroundColor : null,
+    themeColorMetaContent: (
+      themeMeta && typeof themeMeta.getAttribute === 'function'
+    )
+      ? String(themeMeta.getAttribute('content') || '').trim()
+      : '',
+    ...extra,
   };
 }
 
@@ -2369,7 +2582,11 @@ function resolveLiteTopBarColorSyncVisualSectionIndex(
 ) {
   const sections = swipeConfig && Array.isArray(swipeConfig.sections) ? swipeConfig.sections : [];
   if (sections.length <= 0) {
-    return -1;
+    return {
+      index: -1,
+      source: 'none',
+      sectionId: '',
+    };
   }
 
   const visualSectionIdRaw = (
@@ -2384,7 +2601,11 @@ function resolveLiteTopBarColorSyncVisualSectionIndex(
     for (let i = 0; i < sections.length; i += 1) {
       const section = sections[i];
       if (section && typeof section.id === 'string' && section.id === visualSectionId) {
-        return i;
+        return {
+          index: i,
+          source: 'section-styling-dataset',
+          sectionId: visualSectionId,
+        };
       }
     }
   }
@@ -2395,17 +2616,46 @@ function resolveLiteTopBarColorSyncVisualSectionIndex(
     && swipeState.activeSectionIndex >= 0
     && swipeState.activeSectionIndex < sections.length
   ) {
-    return Math.floor(swipeState.activeSectionIndex);
+    const stateIndex = Math.floor(swipeState.activeSectionIndex);
+    const stateSection = sections[stateIndex];
+    return {
+      index: stateIndex,
+      source: 'swipe-state',
+      sectionId: stateSection && typeof stateSection.id === 'string' ? stateSection.id : '',
+    };
   }
 
-  return findClosestSwipeSectionIndexToFrame(frame, swipeConfig);
+  const fallbackIndex = findClosestSwipeSectionIndexToFrame(frame, swipeConfig);
+  const fallbackSection = (
+    fallbackIndex >= 0
+    && fallbackIndex < sections.length
+  )
+    ? sections[fallbackIndex]
+    : null;
+  return {
+    index: fallbackIndex,
+    source: 'closest-frame-fallback',
+    sectionId: fallbackSection && typeof fallbackSection.id === 'string' ? fallbackSection.id : '',
+  };
 }
 
 function resolveTopBarColorSyncTintState(
   swipeConfig = resolveSwipeSectionsConfig(),
   topBarColorSyncConfig = resolveTopBarColorSyncConfig(),
 ) {
+  const visualSectionId = (
+    sectionStylingBackgroundLayer
+    && sectionStylingBackgroundLayer.dataset
+    && typeof sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId === 'string'
+  )
+    ? sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId.trim()
+    : '';
   if (!topBarColorSyncConfig || topBarColorSyncConfig.enabled !== true) {
+    topBarTintDebugLog('resolve-disabled', {
+      phase: 'resolve',
+      reason: 'topBarColorSync-disabled',
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
     return {
       tint: null,
       keepPrevious: false,
@@ -2413,6 +2663,12 @@ function resolveTopBarColorSyncTintState(
   }
   const sections = swipeConfig && Array.isArray(swipeConfig.sections) ? swipeConfig.sections : [];
   if (!swipeConfig || swipeConfig.enabled !== true || sections.length <= 0) {
+    topBarTintDebugLog('resolve-disabled', {
+      phase: 'resolve',
+      reason: 'swipe-sections-disabled-or-empty',
+      liteMode: isLiteModeActive(),
+      sectionCount: sections.length,
+    }, topBarColorSyncConfig);
     return {
       tint: null,
       keepPrevious: false,
@@ -2420,6 +2676,11 @@ function resolveTopBarColorSyncTintState(
   }
   const swipeState = STATE && STATE.swipeSections ? STATE.swipeSections : null;
   if (!swipeState || typeof swipeState !== 'object') {
+    topBarTintDebugLog('resolve-disabled', {
+      phase: 'resolve',
+      reason: 'missing-swipe-state',
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
     return {
       tint: null,
       keepPrevious: false,
@@ -2435,8 +2696,10 @@ function resolveTopBarColorSyncTintState(
     && swipeState.transitionToSectionIndex < sections.length
   );
   if (hasValidTransition) {
-    const outgoingSection = sections[Math.floor(swipeState.transitionFromSectionIndex)];
-    const incomingSection = sections[Math.floor(swipeState.transitionToSectionIndex)];
+    const outgoingIndex = Math.floor(swipeState.transitionFromSectionIndex);
+    const incomingIndex = Math.floor(swipeState.transitionToSectionIndex);
+    const outgoingSection = sections[outgoingIndex];
+    const incomingSection = sections[incomingIndex];
     const outgoingColor = resolveTopBarColorSyncColorBySectionId(
       outgoingSection && outgoingSection.id,
       topBarColorSyncConfig,
@@ -2446,6 +2709,20 @@ function resolveTopBarColorSyncTintState(
       topBarColorSyncConfig,
     );
     if (typeof outgoingColor !== 'string' || typeof incomingColor !== 'string') {
+      topBarTintDebugLog('resolve-transition', {
+        phase: 'transition',
+        liteMode: isLiteModeActive(),
+        fromIndex: outgoingIndex,
+        toIndex: incomingIndex,
+        fromSectionId: outgoingSection && outgoingSection.id,
+        toSectionId: incomingSection && incomingSection.id,
+        fromColor: outgoingColor,
+        toColor: incomingColor,
+        keepPrevious: true,
+        reason: 'missing-transition-color',
+        visualSectionId,
+        activeSectionIndexState: swipeState.activeSectionIndex,
+      }, topBarColorSyncConfig);
       return {
         tint: null,
         keepPrevious: true,
@@ -2454,6 +2731,20 @@ function resolveTopBarColorSyncTintState(
     const outgoingRgb = parseCssColorToRgb(outgoingColor);
     const incomingRgb = parseCssColorToRgb(incomingColor);
     if (!outgoingRgb || !incomingRgb) {
+      topBarTintDebugLog('resolve-transition', {
+        phase: 'transition',
+        liteMode: isLiteModeActive(),
+        fromIndex: outgoingIndex,
+        toIndex: incomingIndex,
+        fromSectionId: outgoingSection && outgoingSection.id,
+        toSectionId: incomingSection && incomingSection.id,
+        fromColor: outgoingColor,
+        toColor: incomingColor,
+        keepPrevious: true,
+        reason: 'transition-color-parse-failed',
+        visualSectionId,
+        activeSectionIndexState: swipeState.activeSectionIndex,
+      }, topBarColorSyncConfig);
       return {
         tint: null,
         keepPrevious: true,
@@ -2466,30 +2757,50 @@ function resolveTopBarColorSyncTintState(
       0,
       1,
     );
+    const transitionTint = rgbColorToCss(interpolateRgbColor(outgoingRgb, incomingRgb, progress));
+    topBarTintDebugLog('resolve-transition', {
+      phase: 'transition',
+      liteMode: isLiteModeActive(),
+      fromIndex: outgoingIndex,
+      toIndex: incomingIndex,
+      fromSectionId: outgoingSection && outgoingSection.id,
+      toSectionId: incomingSection && incomingSection.id,
+      fromColor: outgoingColor,
+      toColor: incomingColor,
+      progress,
+      resolvedTint: transitionTint,
+      keepPrevious: false,
+      visualSectionId,
+      activeSectionIndexState: swipeState.activeSectionIndex,
+    }, topBarColorSyncConfig);
     return {
-      tint: rgbColorToCss(interpolateRgbColor(outgoingRgb, incomingRgb, progress)),
+      tint: transitionTint,
       keepPrevious: false,
     };
   }
 
   const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
-  let activeSectionIndex = -1;
-  if (isLiteModeActive()) {
-    // Keep lite tint source aligned with the section styling layer's current visual section.
-    activeSectionIndex = resolveLiteTopBarColorSyncVisualSectionIndex(
-      swipeConfig,
-      swipeState,
-      currentFrame,
-    );
-  } else {
-    activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
-      ? Math.floor(swipeState.activeSectionIndex)
-      : -1;
-    if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
-      activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
-    }
+  let activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
+    ? Math.floor(swipeState.activeSectionIndex)
+    : -1;
+  let activeSectionSource = 'swipe-state';
+  if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
+    activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
+    activeSectionSource = 'closest-frame-fallback';
   }
   if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
+    topBarTintDebugLog('resolve-steady', {
+      phase: 'steady',
+      liteMode: isLiteModeActive(),
+      frame: currentFrame,
+      activeSectionIndexResolved: activeSectionIndex,
+      activeSectionSource,
+      keepPrevious: false,
+      reason: 'active-section-index-invalid',
+      visualSectionId,
+      activeSectionIndexState: swipeState.activeSectionIndex,
+      transitioning: swipeState.isTransitioning === true,
+    }, topBarColorSyncConfig);
     return {
       tint: null,
       keepPrevious: false,
@@ -2501,11 +2812,38 @@ function resolveTopBarColorSyncTintState(
     topBarColorSyncConfig,
   );
   if (typeof activeColor === 'string' && activeColor.length > 0) {
+    topBarTintDebugLog('resolve-steady', {
+      phase: 'steady',
+      liteMode: isLiteModeActive(),
+      frame: currentFrame,
+      activeSectionIndexResolved: activeSectionIndex,
+      activeSectionIdResolved: activeSection && activeSection.id,
+      activeSectionSource,
+      activeColor,
+      keepPrevious: false,
+      visualSectionId,
+      activeSectionIndexState: swipeState.activeSectionIndex,
+      transitioning: swipeState.isTransitioning === true,
+    }, topBarColorSyncConfig);
     return {
       tint: activeColor,
       keepPrevious: false,
     };
   }
+  topBarTintDebugLog('resolve-steady', {
+    phase: 'steady',
+    liteMode: isLiteModeActive(),
+    frame: currentFrame,
+    activeSectionIndexResolved: activeSectionIndex,
+    activeSectionIdResolved: activeSection && activeSection.id,
+    activeSectionSource,
+    activeColor,
+    keepPrevious: true,
+    reason: 'mapped-color-missing',
+    visualSectionId,
+    activeSectionIndexState: swipeState.activeSectionIndex,
+    transitioning: swipeState.isTransitioning === true,
+  }, topBarColorSyncConfig);
   return {
     tint: null,
     keepPrevious: true,
@@ -2513,14 +2851,28 @@ function resolveTopBarColorSyncTintState(
 }
 
 function updateSafariTopTintFromGradient() {
+  const topBarColorSyncConfig = resolveTopBarColorSyncConfig();
   const splashTintOverride = typeof loadingScreenTopTintOverride === 'string'
     ? loadingScreenTopTintOverride.trim()
     : '';
   if (splashTintOverride.length > 0) {
+    const previousTint = lastSafariTopTint;
     if (splashTintOverride !== lastSafariTopTint) {
       setSafariTopTint(splashTintOverride);
       lastSafariTopTint = splashTintOverride;
     }
+    topBarTintDebugLog('apply', {
+      phase: 'apply',
+      source: 'splash-override',
+      appliedTint: splashTintOverride,
+      previousTint,
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
+    topBarTintDebugLog('apply-dom', resolveTopBarTintDomDebugSnapshot({
+      phase: 'apply-dom',
+      source: 'splash-override',
+      intendedTint: splashTintOverride,
+    }), topBarColorSyncConfig);
     return splashTintOverride;
   }
 
@@ -2528,7 +2880,7 @@ function updateSafariTopTintFromGradient() {
   try {
     topBarColorSyncState = resolveTopBarColorSyncTintState(
       resolveSwipeSectionsConfig(),
-      resolveTopBarColorSyncConfig(),
+      topBarColorSyncConfig,
     );
   } catch (_error) {
     topBarColorSyncState = null;
@@ -2538,10 +2890,25 @@ function updateSafariTopTintFromGradient() {
     && typeof topBarColorSyncState.tint === 'string'
     && topBarColorSyncState.tint.length > 0
   ) {
+    const previousTint = lastSafariTopTint;
     if (topBarColorSyncState.tint !== lastSafariTopTint) {
       setSafariTopTint(topBarColorSyncState.tint);
       lastSafariTopTint = topBarColorSyncState.tint;
     }
+    topBarTintDebugLog('apply', {
+      phase: 'apply',
+      source: 'top-bar-color-sync',
+      appliedTint: topBarColorSyncState.tint,
+      previousTint,
+      keepPrevious: false,
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
+    topBarTintDebugLog('apply-dom', resolveTopBarTintDomDebugSnapshot({
+      phase: 'apply-dom',
+      source: 'top-bar-color-sync',
+      intendedTint: topBarColorSyncState.tint,
+      keepPrevious: false,
+    }), topBarColorSyncConfig);
     return topBarColorSyncState.tint;
   }
   if (
@@ -2550,16 +2917,54 @@ function updateSafariTopTintFromGradient() {
     && typeof lastSafariTopTint === 'string'
     && lastSafariTopTint.length > 0
   ) {
+    topBarTintDebugLog('apply', {
+      phase: 'apply',
+      source: 'top-bar-color-sync-keep-previous',
+      appliedTint: lastSafariTopTint,
+      keepPrevious: true,
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
+    topBarTintDebugLog('apply-dom', resolveTopBarTintDomDebugSnapshot({
+      phase: 'apply-dom',
+      source: 'top-bar-color-sync-keep-previous',
+      intendedTint: lastSafariTopTint,
+      keepPrevious: true,
+    }), topBarColorSyncConfig);
     return lastSafariTopTint;
   }
 
   const gradientStops = resolvePageBackgroundGradientStopsFromCssVariables();
   const nextTint = getGradientColorAt(gradientStops, 0);
   if (nextTint === lastSafariTopTint) {
+    topBarTintDebugLog('apply', {
+      phase: 'apply',
+      source: 'gradient-fallback-unchanged',
+      appliedTint: nextTint,
+      liteMode: isLiteModeActive(),
+    }, topBarColorSyncConfig);
+    topBarTintDebugLog('apply-dom', resolveTopBarTintDomDebugSnapshot({
+      phase: 'apply-dom',
+      source: 'gradient-fallback-unchanged',
+      intendedTint: nextTint,
+    }), topBarColorSyncConfig);
     return nextTint;
   }
+  const previousTint = lastSafariTopTint;
   setSafariTopTint(nextTint);
   lastSafariTopTint = nextTint;
+  topBarTintDebugLog('apply', {
+    phase: 'apply',
+    source: 'gradient-fallback',
+    appliedTint: nextTint,
+    previousTint,
+    liteMode: isLiteModeActive(),
+  }, topBarColorSyncConfig);
+  topBarTintDebugLog('apply-dom', resolveTopBarTintDomDebugSnapshot({
+    phase: 'apply-dom',
+    source: 'gradient-fallback',
+    intendedTint: nextTint,
+    previousTint,
+  }), topBarColorSyncConfig);
   return nextTint;
 }
 
@@ -2616,14 +3021,20 @@ function shouldSyncDynamicThemeColorForTopTint(
 }
 
 function syncSafariTopTintColor() {
+  const topBarColorSyncConfig = resolveTopBarColorSyncConfig();
   const topTint = updateSafariTopTintFromGradient();
   if (
-    shouldSyncDynamicThemeColorForTopTint(resolveTopBarColorSyncConfig())
+    shouldSyncDynamicThemeColorForTopTint(topBarColorSyncConfig)
     && typeof topTint === 'string'
     && topTint.trim().length > 0
   ) {
     setDynamicThemeColor(topTint);
   }
+  topBarTintDebugLog('post-theme-sync-dom', resolveTopBarTintDomDebugSnapshot({
+    phase: 'post-theme-sync-dom',
+    topTintReturned: topTint,
+    shouldSyncThemeColor: shouldSyncDynamicThemeColorForTopTint(topBarColorSyncConfig),
+  }), topBarColorSyncConfig);
   return topTint;
 }
 
@@ -8124,6 +8535,22 @@ function syncSectionStylingLayers(nowMs = performance.now(), currentFrame = null
   sectionStylingBackgroundLayer.dataset.sectionStylingTimestamp = Number.isFinite(nowMs)
     ? String(nowMs)
     : String(performance.now());
+  topBarTintDebugLog('section-styling', {
+    phase: 'section-styling-sync',
+    liteMode: isLiteModeActive(),
+    frame: frameNow,
+    isTransitioning,
+    outgoingIndex,
+    outgoingSectionId: outgoingSection && outgoingSection.id,
+    outgoingOpacityMultiplier,
+    incomingIndex,
+    incomingSectionId: incomingSection && incomingSection.id,
+    incomingOpacityMultiplier,
+    datasetActiveSectionId: sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId || '',
+    swipeStateActiveSectionIndex: swipeState && Number.isFinite(swipeState.activeSectionIndex)
+      ? Math.floor(swipeState.activeSectionIndex)
+      : -1,
+  }, resolveTopBarColorSyncConfig());
 }
 
 function setSectionStylingTopSlotsPositionMode(mode = '') {

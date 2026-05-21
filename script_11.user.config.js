@@ -1293,6 +1293,10 @@
       'section-3': 'rgb(222, 192, 168)',
       'section-4': 'rgb(7, 10, 22)',
     },
+    debug: {
+      enabled: false, // or use URL param ?topTintDebug=1 (alias: ?tintDebug=1)
+      throttleMs: 0,
+    },
     // Optional override for meta[name="theme-color"] syncing. Null/omitted keeps iOS default behavior.
     // syncThemeColor: true,
   },
