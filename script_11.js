@@ -25095,6 +25095,23 @@ function updateSwipeSectionStylingTransitionProgress(progress) {
   swipeState.sectionStylingOpacityMultiplier = clampedProgress;
 }
 
+function commitLiteSwipeSectionFinalTintSync(targetSection, nowMs = performance.now()) {
+  if (!isLiteModeActive()) {
+    return;
+  }
+  const targetFrame = (
+    targetSection
+    && Number.isFinite(Number(targetSection.frame))
+  )
+    ? Math.max(0, Number(targetSection.frame))
+    : getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
+  const safeNowMs = Number.isFinite(Number(nowMs))
+    ? Number(nowMs)
+    : performance.now();
+  syncSectionStylingLayers(safeNowMs, targetFrame);
+  syncSafariTopTintColor();
+}
+
 function finalizeSwipeSectionTransition(targetIndex, direction, reason, swipeConfig = resolveSwipeSectionsConfig()) {
   const swipeState = STATE.swipeSections;
   if (!swipeState || !Array.isArray(swipeConfig.sections) || swipeConfig.sections.length <= 0) {
@@ -25137,9 +25154,11 @@ function finalizeSwipeSectionTransition(targetIndex, direction, reason, swipeCon
       reason: typeof reason === 'string' && reason.length > 0 ? reason : 'swipe',
     });
   }
+  commitLiteSwipeSectionFinalTintSync(targetSection, performance.now());
   renderScene({ skipAutoStart: true });
   if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => {
+    requestAnimationFrame((rafNowMs) => {
+      commitLiteSwipeSectionFinalTintSync(targetSection, rafNowMs);
       renderScene({ skipAutoStart: true });
     });
   }
