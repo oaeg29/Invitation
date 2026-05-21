@@ -18,9 +18,9 @@
   liteMode: {
     enabled: true,
     queryParamKey: 'lite',
-    splashHintDelayMs: 6000,
+    splashHintDelayMs: 4500,
     splashHintRequireHeroNotReady: false,
-    splashHintText: 'slow speeds? tap here for a simpler experience',
+    splashHintText: 'slow speeds?  tap here for a simpler experience',
     splashHintColor: null,
     heroReadyTimeoutMs: 0, // 0 = splashHintDelayMs + built-in safety margin
     splashHintTestStall: {
@@ -31,6 +31,7 @@
       disableRelative166Offset: true, // in lite mode: skip relative166 auto-mode even on iOS
     },
     videoOverrides: {
+    
       hero: {
         webm: './hero_final_keyed.webm',
         webmFallback: './hero_final_keyed.webm',

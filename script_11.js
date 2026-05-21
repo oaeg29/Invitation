@@ -719,7 +719,6 @@ function applyLiteModeCanvasVisibility() {
     frontCanvas,
     flowersBackCanvas,
     flowersFrontCanvas,
-    heroHintCanvas,
     jumpSparkleBackLayer,
     jumpSparkleFrontLayer,
   ];
@@ -2416,11 +2415,16 @@ function resolveTopBarColorSyncTintState(
     };
   }
 
-  let activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
-    ? Math.floor(swipeState.activeSectionIndex)
-    : -1;
+  // Keep tint sampling aligned with what is visually on screen by resolving
+  // section from the current hero frame first (same basis used by section styling).
+  const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
+  let activeSectionIndex = findActiveSwipeSectionIndexForFrame(swipeConfig, currentFrame);
   if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
-    const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
+    activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
+      ? Math.floor(swipeState.activeSectionIndex)
+      : -1;
+  }
+  if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
     activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
   }
   if (!(activeSectionIndex >= 0 && activeSectionIndex < sections.length)) {
@@ -23320,7 +23324,9 @@ function drawOverlayBranchRangeWithStemCache(options = {}) {
 
 function renderScene(options = {}) {
   if (!STATE.branchGarden || !STATE.stemImage) {
-    cancelFlowerInteractionFrame();
+    if (!isLiteModeActive()) {
+      cancelFlowerInteractionFrame();
+    }
     const heroPlaybackGateConfig = resolveHeroPlaybackGateConfig();
     const heroPlaybackFrame = getCurrentHeroVideoFrame(heroPlaybackGateConfig);
     const overlayNowMs = performance.now();
@@ -23344,9 +23350,15 @@ function renderScene(options = {}) {
       syncCenterOverlayImageLayer(pausedNowMs, pausedFrame);
       syncSection1LabelLayer(pausedNowMs);
       syncSwipeSectionsScrollHintLayer(pausedNowMs);
+      if (isLiteModeActive()) {
+        syncFlowerInteractionLoop();
+      }
       return;
     }
     syncSwipeSectionsScrollHintLayer(overlayNowMs);
+    if (isLiteModeActive()) {
+      syncFlowerInteractionLoop();
+    }
     return;
   }
   if (syncGlobalFoliageScaleIfNeeded()) {
