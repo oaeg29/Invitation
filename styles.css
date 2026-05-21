@@ -890,6 +890,34 @@ body[data-viewport-layout-mode="relative166"] #loadingScreen {
   white-space: pre-line;
 }
 
+#loadingLiteModeHint {
+  display: block;
+  margin-top: 12px;
+  letter-spacing: 0.025em;
+  text-transform: lowercase;
+  color: var(--loading-text-color, #000000);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+  font-size: max(12px, calc(var(--loading-font-size, 17px) * 0.82));
+  line-height: 1.3;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 260ms ease, transform 260ms ease;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+#loadingLiteModeHint.is-visible {
+  opacity: 0.72;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#loadingLiteModeHint.is-emphasized {
+  opacity: 1;
+  font-weight: 800;
+}
+
 .loading-dots {
   margin-top: var(--loading-dots-gap, 10px);
   display: inline-flex;

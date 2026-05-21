@@ -8,6 +8,58 @@
       : 9;
 
     return {
+  // LITE MODE - Opt-in "simpler experience" for slow devices.
+  // Activated when the URL contains `?<queryParamKey>=1` (e.g. ?lite=1).
+  // When active: the hero video plays normally, the foliage video plays once
+  // then freezes on its last frame, and the canvas-based branches / leaves /
+  // flowers / jump-sparkle system is disabled entirely. DPR is also capped to 1.
+  // The splash shows an opt-in hint after `splashHintDelayMs` if the hero
+  // video has not yet reached HAVE_CURRENT_DATA (likely-slow load).
+  liteMode: {
+    enabled: true,
+    queryParamKey: 'lite',
+    splashHintDelayMs: 6000,
+    splashHintRequireHeroNotReady: false,
+    splashHintText: 'slow speeds? tap here for a simpler experience',
+    splashHintColor: null,
+    heroReadyTimeoutMs: 0, // 0 = splashHintDelayMs + built-in safety margin
+    splashHintTestStall: {
+      enabled: false, // testing-only: keep splash visible and hold hero loading in full mode
+      stallDurationMs: 15000,
+    },
+    viewportLayout: {
+      disableRelative166Offset: true, // in lite mode: skip relative166 auto-mode even on iOS
+    },
+    videoOverrides: {
+      hero: {
+        webm: './hero_final_keyed.webm',
+        webmFallback: './hero_final_keyed.webm',
+        mov: './hero_final_foriOS.mov',
+        movFallback: './hero_final_foriOS.mov',
+      },
+      foliage: {
+        lowerVideo: {
+          webm: './smallGrowBloom_lower.webm',
+          webmFallback: './smallGrowBloom_lower.webm',
+          mov: './smallGrowBloom_lower_foriOS.mov',
+          movFallback: './smallGrowBloom_lower_foriOS.mov',
+        },
+        upperVideo: {
+          webm: './smallGrowBloom_upper.webm',
+          webmFallback: './smallGrowBloom_upper.webm',
+          mov: './smallGrowBloom_upper_foriOS.mov',
+          movFallback: './smallGrowBloom_upper_foriOS.mov',
+        },
+        combinedVideo: {
+          webm: './foliage_vid_combined.webm',
+          webmFallback: './foliage_vid_combined.webm',
+          mov: './foliage_vid_combined.mov',
+          movFallback: './foliage_vid_combined.mov',
+        },
+      },
+    },
+  },
+
   // SECTION CONTROL - Enable/disable individual canvas elements
   sectionControl: {
     enabled: false,
@@ -1433,7 +1485,10 @@
         hoverSpeedRange: [2.2, 4.2],
       },
       blue: {
-        spritePath: './blue_sprite_2_upscaled.png',
+        // NOTE: this fallback is shadowed at runtime by `spritePathPool[0]`.
+        // Kept pointing at a real file so any future code path that reads
+        // `spritePath` directly does not 404.
+        spritePath: './blue_sprite_2.png',
         spritePathPool: [
           './blue_sprite_2.png','./blue_sprite_1.png','./blue_sprite_3.png', './blue_sprite.png',
           './blue_sprite_2.png'

@@ -77,6 +77,10 @@ const FOLIAGE_VIDEO_HANDOFF_RUNTIME = {
   completed: false,
   timeoutId: null,
 };
+const FOLIAGE_VIDEO_PRELOAD_RUNTIME = {
+  promotedToAuto: false,
+  listenersInstalled: false,
+};
 const centerOverlayImageLayer = document.createElement('img');
 const centerOverlayImageLayerAlt = document.createElement('img');
 const centerOverlayImageLayers = [centerOverlayImageLayer, centerOverlayImageLayerAlt];
@@ -285,6 +289,10 @@ const HERO_VIDEO_SOURCE_RUNTIME = {
   errorEvents: 0,
   errorListenerInstalled: false,
 };
+const HERO_STARTUP_STALL_RUNTIME = {
+  suppressed: false,
+  previousPreload: 'auto',
+};
 const FOLIAGE_VIDEO_MODE_SPLIT = 'split';
 const FOLIAGE_VIDEO_MODE_COMBINED = 'combined';
 const FOLIAGE_VIDEO_TYPES_SPLIT = Object.freeze(['lower', 'upper']);
@@ -395,6 +403,334 @@ function normalizeHostedAssetPath(path) {
     return `.${trimmed}`;
   }
   return trimmed;
+}
+
+// =========================
+// Lite mode (opt-in "simpler experience")
+// =========================
+let __LITE_MODE_RESOLVED = null;
+
+function resolveLiteModeConfig() {
+  // Read from `window.STEM_WARP_USER_CONFIG` (set by script_11.user.config.js
+  // before this script runs) so this is safe to call even in the temporal
+  // dead zone of the local `const CONFIG` declaration further below.
+  const userConfig = (
+    typeof window !== 'undefined'
+    && window
+    && typeof window === 'object'
+    && window.STEM_WARP_USER_CONFIG
+    && typeof window.STEM_WARP_USER_CONFIG === 'object'
+  )
+    ? window.STEM_WARP_USER_CONFIG
+    : null;
+  const fromConfig = (
+    userConfig
+    && userConfig.liteMode
+    && typeof userConfig.liteMode === 'object'
+  )
+    ? userConfig.liteMode
+    : null;
+  const safe = fromConfig || {};
+  const safeFoliageConfig = (
+    userConfig
+    && userConfig.foliageVideos
+    && typeof userConfig.foliageVideos === 'object'
+  )
+    ? userConfig.foliageVideos
+    : {};
+  const safeLowerVideo = (
+    safeFoliageConfig.lowerVideo
+    && typeof safeFoliageConfig.lowerVideo === 'object'
+  )
+    ? safeFoliageConfig.lowerVideo
+    : {};
+  const safeUpperVideo = (
+    safeFoliageConfig.upperVideo
+    && typeof safeFoliageConfig.upperVideo === 'object'
+  )
+    ? safeFoliageConfig.upperVideo
+    : {};
+  const safeCombinedVideo = (
+    safeFoliageConfig.combinedVideo
+    && typeof safeFoliageConfig.combinedVideo === 'object'
+  )
+    ? safeFoliageConfig.combinedVideo
+    : {};
+  const safeSplashHintTestStall = (
+    safe.splashHintTestStall
+    && typeof safe.splashHintTestStall === 'object'
+  )
+    ? safe.splashHintTestStall
+    : {};
+  const safeViewportLayout = (
+    safe.viewportLayout
+    && typeof safe.viewportLayout === 'object'
+  )
+    ? safe.viewportLayout
+    : {};
+  const safeVideoOverrides = (
+    safe.videoOverrides
+    && typeof safe.videoOverrides === 'object'
+  )
+    ? safe.videoOverrides
+    : {};
+  const safeFoliageOverrides = (
+    safeVideoOverrides.foliage
+    && typeof safeVideoOverrides.foliage === 'object'
+  )
+    ? safeVideoOverrides.foliage
+    : {};
+  const sanitizeSourcePath = (value, fallbackValue = '') => {
+    const fromValue = typeof value === 'string' ? value.trim() : '';
+    if (fromValue.length > 0) {
+      const normalized = normalizeHostedAssetPath(fromValue);
+      if (typeof normalized === 'string' && normalized.trim().length > 0) {
+        return normalized.trim();
+      }
+    }
+    const fromFallback = typeof fallbackValue === 'string' ? fallbackValue.trim() : '';
+    if (fromFallback.length > 0) {
+      const normalizedFallback = normalizeHostedAssetPath(fromFallback);
+      if (typeof normalizedFallback === 'string' && normalizedFallback.trim().length > 0) {
+        return normalizedFallback.trim();
+      }
+    }
+    return '';
+  };
+  const resolveVideoVariantOverride = (rawVariant, defaults) => {
+    const safeRawVariant = (rawVariant && typeof rawVariant === 'object') ? rawVariant : {};
+    const safeDefaults = (defaults && typeof defaults === 'object') ? defaults : {};
+    const webm = sanitizeSourcePath(safeRawVariant.webm, safeDefaults.webm);
+    const mov = sanitizeSourcePath(safeRawVariant.mov, safeDefaults.mov);
+    const webmFallback = sanitizeSourcePath(safeRawVariant.webmFallback, webm);
+    const movFallback = sanitizeSourcePath(safeRawVariant.movFallback, mov);
+    return {
+      webm,
+      webmFallback,
+      mov,
+      movFallback,
+    };
+  };
+  const queryParamKey = (
+    typeof safe.queryParamKey === 'string' && safe.queryParamKey.trim().length > 0
+  )
+    ? safe.queryParamKey.trim()
+    : 'lite';
+  return {
+    enabled: safe.enabled !== false,
+    queryParamKey,
+    splashHintDelayMs: Number.isFinite(Number(safe.splashHintDelayMs))
+      ? Math.max(0, Number(safe.splashHintDelayMs))
+      : 6000,
+    splashHintRequireHeroNotReady: safe.splashHintRequireHeroNotReady !== false,
+    splashHintText: (typeof safe.splashHintText === 'string' && safe.splashHintText.trim().length > 0)
+      ? safe.splashHintText.trim()
+      : 'slow speeds? tap here for a simpler experience',
+    splashHintColor: (typeof safe.splashHintColor === 'string' && safe.splashHintColor.trim().length > 0)
+      ? safe.splashHintColor.trim()
+      : null,
+    heroReadyTimeoutMs: Number.isFinite(Number(safe.heroReadyTimeoutMs))
+      ? Math.max(0, Number(safe.heroReadyTimeoutMs))
+      : 0,
+    splashHintTestStall: {
+      enabled: safeSplashHintTestStall.enabled === true,
+      stallDurationMs: Number.isFinite(Number(safeSplashHintTestStall.stallDurationMs))
+        ? Math.max(0, Number(safeSplashHintTestStall.stallDurationMs))
+        : 15000,
+    },
+    viewportLayout: {
+      disableRelative166Offset: safeViewportLayout.disableRelative166Offset !== false,
+    },
+    videoOverrides: {
+      hero: resolveVideoVariantOverride(safeVideoOverrides.hero, {
+        webm: HERO_VIDEO_PATH_DEFAULT,
+        webmFallback: HERO_VIDEO_PATH_DEFAULT,
+        mov: HERO_VIDEO_PATH_APPLE_SAFARI,
+        movFallback: HERO_VIDEO_PATH_APPLE_SAFARI,
+      }),
+      foliage: {
+        lowerVideo: resolveVideoVariantOverride(safeFoliageOverrides.lowerVideo, {
+          webm: sanitizeSourcePath(safeLowerVideo.webm, './smallGrowBloom_lower.webm'),
+          webmFallback: sanitizeSourcePath(safeLowerVideo.webm, './smallGrowBloom_lower.webm'),
+          mov: sanitizeSourcePath(safeLowerVideo.mov, './smallGrowBloom_lower_foriOS.mov'),
+          movFallback: sanitizeSourcePath(safeLowerVideo.mov, './smallGrowBloom_lower_foriOS.mov'),
+        }),
+        upperVideo: resolveVideoVariantOverride(safeFoliageOverrides.upperVideo, {
+          webm: sanitizeSourcePath(safeUpperVideo.webm, './smallGrowBloom_upper.webm'),
+          webmFallback: sanitizeSourcePath(safeUpperVideo.webm, './smallGrowBloom_upper.webm'),
+          mov: sanitizeSourcePath(safeUpperVideo.mov, './smallGrowBloom_upper_foriOS.mov'),
+          movFallback: sanitizeSourcePath(safeUpperVideo.mov, './smallGrowBloom_upper_foriOS.mov'),
+        }),
+        combinedVideo: resolveVideoVariantOverride(safeFoliageOverrides.combinedVideo, {
+          webm: sanitizeSourcePath(safeCombinedVideo.webm, './foliage_vid_combined.webm'),
+          webmFallback: sanitizeSourcePath(safeCombinedVideo.webm, './foliage_vid_combined.webm'),
+          mov: sanitizeSourcePath(safeCombinedVideo.mov, './foliage_vid_combined.mov'),
+          movFallback: sanitizeSourcePath(safeCombinedVideo.mov, './foliage_vid_combined.mov'),
+        }),
+      },
+    },
+  };
+}
+
+function isLiteModeActive() {
+  if (__LITE_MODE_RESOLVED !== null) {
+    return __LITE_MODE_RESOLVED;
+  }
+  const liteConfig = resolveLiteModeConfig();
+  if (liteConfig.enabled !== true) {
+    __LITE_MODE_RESOLVED = false;
+    return false;
+  }
+  let active = false;
+  try {
+    const search = (typeof window !== 'undefined' && window.location && typeof window.location.search === 'string')
+      ? window.location.search
+      : '';
+    if (search.length > 0 && typeof URLSearchParams === 'function') {
+      const params = new URLSearchParams(search);
+      const raw = params.get(liteConfig.queryParamKey);
+      if (typeof raw === 'string') {
+        const normalized = raw.trim().toLowerCase();
+        active = (
+          normalized === '1'
+          || normalized === 'true'
+          || normalized === 'yes'
+          || normalized === 'on'
+          || normalized === ''
+        );
+      }
+    }
+  } catch (_error) {
+    active = false;
+  }
+  __LITE_MODE_RESOLVED = active;
+  return active;
+}
+
+function buildLiteModeReloadUrl() {
+  const liteConfig = resolveLiteModeConfig();
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set(liteConfig.queryParamKey, '1');
+    return url.toString();
+  } catch (_error) {
+    const sep = window.location.search && window.location.search.length > 1 ? '&' : '?';
+    return `${window.location.pathname}${window.location.search || ''}${sep}${liteConfig.queryParamKey}=1${window.location.hash || ''}`;
+  }
+}
+
+function resolveHeroStartupWaitTimeoutMs() {
+  const liteConfig = resolveLiteModeConfig();
+  if (Number.isFinite(Number(liteConfig.heroReadyTimeoutMs)) && Number(liteConfig.heroReadyTimeoutMs) > 0) {
+    return Math.max(1000, Number(liteConfig.heroReadyTimeoutMs));
+  }
+  const baseDelayMs = Number.isFinite(Number(liteConfig.splashHintDelayMs))
+    ? Math.max(0, Number(liteConfig.splashHintDelayMs))
+    : 6000;
+  return Math.max(1500, baseDelayMs + 3500);
+}
+
+function isLiteModeSplashHintTestStallActive() {
+  const liteConfig = resolveLiteModeConfig();
+  if (liteConfig.enabled !== true || isLiteModeActive()) {
+    return false;
+  }
+  return Boolean(
+    liteConfig.splashHintTestStall
+    && liteConfig.splashHintTestStall.enabled === true
+  );
+}
+
+function resolveLiteModeSplashHintTestStallDurationMs() {
+  const liteConfig = resolveLiteModeConfig();
+  const rawDuration = liteConfig
+    && liteConfig.splashHintTestStall
+    && Number.isFinite(Number(liteConfig.splashHintTestStall.stallDurationMs))
+    ? Number(liteConfig.splashHintTestStall.stallDurationMs)
+    : 15000;
+  return Math.max(0, rawDuration);
+}
+
+async function runLiteModeSplashHintTestStallIfNeeded() {
+  if (!isLiteModeSplashHintTestStallActive()) {
+    return false;
+  }
+  const stallDurationMs = resolveLiteModeSplashHintTestStallDurationMs();
+  suppressHeroVideoLoadingForSplashHintTestStall();
+  try {
+    await sleepMs(stallDurationMs);
+  } finally {
+    restoreHeroVideoLoadingAfterSplashHintTestStall();
+  }
+  return true;
+}
+
+let __LITE_MODE_OVERRIDES_APPLIED = false;
+
+function applyLiteModeConfigOverrides() {
+  if (__LITE_MODE_OVERRIDES_APPLIED) {
+    return;
+  }
+  if (!isLiteModeActive()) {
+    return;
+  }
+  __LITE_MODE_OVERRIDES_APPLIED = true;
+  if (typeof CONFIG !== 'object' || CONFIG === null) {
+    return;
+  }
+  // Disable canvas-based branch growth animation entirely (never calculated).
+  if (CONFIG.branchGrowth && typeof CONFIG.branchGrowth === 'object') {
+    CONFIG.branchGrowth.enabled = false;
+    CONFIG.branchGrowth.autoStart = false;
+  }
+  // Disable flowers and leaves rendering entirely.
+  if (CONFIG.flowers && typeof CONFIG.flowers === 'object') {
+    CONFIG.flowers.enabled = false;
+    if (CONFIG.flowers.jumpSparkle && typeof CONFIG.flowers.jumpSparkle === 'object') {
+      CONFIG.flowers.jumpSparkle.enabled = false;
+    }
+  }
+  if (CONFIG.leaves && typeof CONFIG.leaves === 'object') {
+    CONFIG.leaves.enabled = false;
+  }
+  // Keep the foliage video active, but do not fall back to canvas on error.
+  if (CONFIG.foliageVideos && typeof CONFIG.foliageVideos === 'object') {
+    CONFIG.foliageVideos.fallbackToFoliageOnLoadError = false;
+  }
+  // Cap render DPR to 1 to save fillrate on weaker GPUs.
+  if (CONFIG.renderDpr && typeof CONFIG.renderDpr === 'object') {
+    CONFIG.renderDpr.enabled = true;
+    CONFIG.renderDpr.mobileOnly = false;
+    CONFIG.renderDpr.mobileCap = 1;
+    CONFIG.renderDpr.desktopCap = 1;
+  }
+}
+
+function isFoliageVideoFreezeOnEndActive() {
+  return isLiteModeActive();
+}
+
+function applyLiteModeCanvasVisibility() {
+  if (!isLiteModeActive()) {
+    return;
+  }
+  const canvasLikeNodes = [
+    canvas,
+    frontCanvas,
+    flowersBackCanvas,
+    flowersFrontCanvas,
+    heroHintCanvas,
+    jumpSparkleBackLayer,
+    jumpSparkleFrontLayer,
+  ];
+  for (let i = 0; i < canvasLikeNodes.length; i += 1) {
+    const node = canvasLikeNodes[i];
+    if (!node || !node.style) {
+      continue;
+    }
+    node.style.display = 'none';
+    node.style.visibility = 'hidden';
+  }
 }
 
 function setLoadingScreenMessage(message) {
@@ -1051,6 +1387,8 @@ function syncWash2Layer(currentFrame = null) {
 }
 
 let loadingScreenHideTimerId = null;
+let loadingLiteModeHintTimerId = null;
+let loadingLiteModeHintEl = null;
 const loadingScreenGoneCallbacks = [];
 let visualViewportHandlersInstalled = false;
 let viewportLayoutDebugToggleButton = null;
@@ -1114,9 +1452,121 @@ function runWhenLoadingScreenGone(callback) {
   loadingScreenGoneCallbacks.push(callback);
 }
 
+function clearLoadingLiteModeHintTimer() {
+  if (loadingLiteModeHintTimerId !== null) {
+    clearTimeout(loadingLiteModeHintTimerId);
+    loadingLiteModeHintTimerId = null;
+  }
+}
+
+function ensureLoadingLiteModeHintElement() {
+  const splash = document.getElementById('loadingScreen');
+  if (!splash) {
+    loadingLiteModeHintEl = null;
+    return null;
+  }
+  const liteConfig = resolveLiteModeConfig();
+  let hintEl = loadingLiteModeHintEl;
+  if (!hintEl || hintEl.isConnected !== true) {
+    hintEl = document.getElementById('loadingLiteModeHint');
+  }
+  if (!hintEl) {
+    hintEl = document.createElement('a');
+    hintEl.id = 'loadingLiteModeHint';
+    hintEl.href = '#';
+    hintEl.setAttribute('role', 'button');
+    hintEl.setAttribute('aria-hidden', 'true');
+    hintEl.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const reloadUrl = buildLiteModeReloadUrl();
+      if (typeof reloadUrl === 'string' && reloadUrl.length > 0) {
+        window.location.assign(reloadUrl);
+      }
+    });
+    const card = splash.querySelector('.loading-card');
+    if (card) {
+      card.appendChild(hintEl);
+    } else {
+      splash.appendChild(hintEl);
+    }
+  }
+  hintEl.textContent = liteConfig.splashHintText;
+  if (typeof liteConfig.splashHintColor === 'string' && liteConfig.splashHintColor.trim().length > 0) {
+    hintEl.style.color = liteConfig.splashHintColor.trim();
+  } else {
+    hintEl.style.color = '';
+  }
+  loadingLiteModeHintEl = hintEl;
+  return hintEl;
+}
+
+function hideLoadingLiteModeHint() {
+  const hintEl = loadingLiteModeHintEl || document.getElementById('loadingLiteModeHint');
+  if (!hintEl) {
+    return;
+  }
+  hintEl.classList.remove('is-visible', 'is-emphasized');
+  hintEl.setAttribute('aria-hidden', 'true');
+}
+
+function showLoadingLiteModeHint(options = {}) {
+  const safeOptions = isPlainObjectLiteral(options) ? options : {};
+  const liteConfig = resolveLiteModeConfig();
+  if (liteConfig.enabled !== true || isLiteModeActive()) {
+    return false;
+  }
+  const force = safeOptions.force === true;
+  const emphasize = safeOptions.emphasize === true;
+  const requireHeroReadyCheck = safeOptions.requireHeroReadyCheck !== false;
+  if (
+    force !== true
+    && requireHeroReadyCheck
+    && liteConfig.splashHintRequireHeroNotReady !== false
+    && isInitialHeroVideoReadyForStartup()
+  ) {
+    return false;
+  }
+  const hintEl = ensureLoadingLiteModeHintElement();
+  if (!hintEl) {
+    return false;
+  }
+  hintEl.classList.add('is-visible');
+  if (emphasize) {
+    hintEl.classList.add('is-emphasized');
+  } else {
+    hintEl.classList.remove('is-emphasized');
+  }
+  hintEl.setAttribute('aria-hidden', 'false');
+  return true;
+}
+
+function scheduleLoadingLiteModeHint() {
+  clearLoadingLiteModeHintTimer();
+  hideLoadingLiteModeHint();
+  const liteConfig = resolveLiteModeConfig();
+  if (liteConfig.enabled !== true || isLiteModeActive()) {
+    return;
+  }
+  ensureLoadingLiteModeHintElement();
+  const delayMs = Number.isFinite(Number(liteConfig.splashHintDelayMs))
+    ? Math.max(0, Number(liteConfig.splashHintDelayMs))
+    : 6000;
+  loadingLiteModeHintTimerId = window.setTimeout(() => {
+    loadingLiteModeHintTimerId = null;
+    showLoadingLiteModeHint({
+      force: false,
+      emphasize: false,
+      requireHeroReadyCheck: true,
+    });
+  }, delayMs);
+}
+
 function setLoadingScreenVisible(visible) {
   const splash = document.getElementById('loadingScreen');
   if (!splash) {
+    clearLoadingLiteModeHintTimer();
+    loadingLiteModeHintEl = null;
     loadingScreenTopTintOverride = '';
     syncSafariTopTintShim();
     if (!visible) {
@@ -1127,6 +1577,8 @@ function setLoadingScreenVisible(visible) {
   const splashConfig = resolveLoadingScreenConfig();
   applyLoadingScreenConfig(splashConfig);
   if (splashConfig.enabled !== true) {
+    clearLoadingLiteModeHintTimer();
+    hideLoadingLiteModeHint();
     if (loadingScreenHideTimerId !== null) {
       clearTimeout(loadingScreenHideTimerId);
       loadingScreenHideTimerId = null;
@@ -1146,6 +1598,12 @@ function setLoadingScreenVisible(visible) {
       loadingScreenHideTimerId = null;
     }
     splash.classList.remove('is-hidden', 'is-washing', 'is-gone');
+    if (visible) {
+      scheduleLoadingLiteModeHint();
+    } else {
+      clearLoadingLiteModeHintTimer();
+      hideLoadingLiteModeHint();
+    }
     if (!visible) {
       flushLoadingScreenGoneCallbacks();
     }
@@ -1157,8 +1615,11 @@ function setLoadingScreenVisible(visible) {
       loadingScreenHideTimerId = null;
     }
     splash.classList.remove('is-hidden', 'is-washing', 'is-gone');
+    scheduleLoadingLiteModeHint();
     return;
   }
+  clearLoadingLiteModeHintTimer();
+  hideLoadingLiteModeHint();
   if (splashConfig.washEnabled) {
     splash.classList.remove('is-hidden');
     splash.classList.add('is-washing');
@@ -1516,6 +1977,15 @@ function resolveInitialViewportLayoutMode() {
   const modeFromSearchParams = readViewportLayoutModeFromSearchParams();
   if (modeFromSearchParams) {
     return modeFromSearchParams;
+  }
+  const liteConfig = resolveLiteModeConfig();
+  if (
+    isLiteModeActive()
+    && liteConfig
+    && liteConfig.viewportLayout
+    && liteConfig.viewportLayout.disableRelative166Offset === true
+  ) {
+    return VIEWPORT_LAYOUT_MODE_LEGACY;
   }
   if (isLikelySafariOnIOS()) {
     return VIEWPORT_LAYOUT_MODE_RELATIVE_166;
@@ -2198,7 +2668,70 @@ function shouldUseAppleVideoSourceFamily() {
   return USE_APPLE_VIDEO_SOURCE_FAMILY === true;
 }
 
+function resolveVideoSourcePathForFormat(videoVariant, format) {
+  const safeVariant = (videoVariant && typeof videoVariant === 'object') ? videoVariant : {};
+  if (format === 'mov') {
+    return typeof safeVariant.mov === 'string' ? safeVariant.mov : '';
+  }
+  return typeof safeVariant.webm === 'string' ? safeVariant.webm : '';
+}
+
+function resolveVideoFallbackPathForFormat(videoVariant, format) {
+  const safeVariant = (videoVariant && typeof videoVariant === 'object') ? videoVariant : {};
+  if (format === 'mov') {
+    const fallback = typeof safeVariant.movFallback === 'string' ? safeVariant.movFallback : '';
+    return fallback.trim().length > 0 ? fallback : resolveVideoSourcePathForFormat(safeVariant, 'mov');
+  }
+  const fallback = typeof safeVariant.webmFallback === 'string' ? safeVariant.webmFallback : '';
+  return fallback.trim().length > 0 ? fallback : resolveVideoSourcePathForFormat(safeVariant, 'webm');
+}
+
+function appendVideoVariantPathsByPreferredFormat(candidates, videoVariant, preferAppleFamily) {
+  const target = Array.isArray(candidates) ? candidates : [];
+  const pushCandidate = (candidatePath) => {
+    const normalizedPath = normalizeHostedAssetPath(candidatePath);
+    if (typeof normalizedPath !== 'string') {
+      return;
+    }
+    const trimmed = normalizedPath.trim();
+    if (trimmed.length <= 0 || target.includes(trimmed)) {
+      return;
+    }
+    target.push(trimmed);
+  };
+  const preferredFormat = preferAppleFamily ? 'mov' : 'webm';
+  const alternateFormat = preferredFormat === 'mov' ? 'webm' : 'mov';
+  pushCandidate(resolveVideoSourcePathForFormat(videoVariant, preferredFormat));
+  pushCandidate(resolveVideoFallbackPathForFormat(videoVariant, preferredFormat));
+  pushCandidate(resolveVideoSourcePathForFormat(videoVariant, alternateFormat));
+  pushCandidate(resolveVideoFallbackPathForFormat(videoVariant, alternateFormat));
+  return target;
+}
+
+function resolveLiteModeHeroVideoOverrideVariant() {
+  const liteConfig = resolveLiteModeConfig();
+  if (!isLiteModeActive() || !liteConfig || !liteConfig.videoOverrides) {
+    return null;
+  }
+  const heroVariant = liteConfig.videoOverrides.hero;
+  if (!heroVariant || typeof heroVariant !== 'object') {
+    return null;
+  }
+  return heroVariant;
+}
+
 function resolveHeroVideoSourcePath() {
+  const liteOverrideVariant = resolveLiteModeHeroVideoOverrideVariant();
+  if (liteOverrideVariant) {
+    const preferredPath = resolveVideoSourcePathForFormat(
+      liteOverrideVariant,
+      shouldUseAppleVideoSourceFamily() ? 'mov' : 'webm',
+    );
+    const normalizedPreferredPath = normalizeHostedAssetPath(preferredPath);
+    if (typeof normalizedPreferredPath === 'string' && normalizedPreferredPath.trim().length > 0) {
+      return normalizedPreferredPath.trim();
+    }
+  }
   if (shouldUseAppleVideoSourceFamily()) {
     return HERO_VIDEO_PATH_APPLE_SAFARI;
   }
@@ -2257,10 +2790,15 @@ function setHeroVideoSourcePath(path, options = {}) {
 }
 
 function buildHeroVideoSourceCandidates() {
-  const primaryPath = normalizeHostedAssetPath(resolveHeroVideoSourcePath());
   const candidates = [];
-  if (typeof primaryPath === 'string' && primaryPath.trim().length > 0) {
-    candidates.push(primaryPath.trim());
+  const liteOverrideVariant = resolveLiteModeHeroVideoOverrideVariant();
+  if (liteOverrideVariant) {
+    appendVideoVariantPathsByPreferredFormat(candidates, liteOverrideVariant, shouldUseAppleVideoSourceFamily());
+  } else {
+    const primaryPath = normalizeHostedAssetPath(resolveHeroVideoSourcePath());
+    if (typeof primaryPath === 'string' && primaryPath.trim().length > 0) {
+      candidates.push(primaryPath.trim());
+    }
   }
   return candidates;
 }
@@ -2361,19 +2899,89 @@ function configureHeroVideoElement() {
   }
 }
 
+function suppressHeroVideoLoadingForSplashHintTestStall() {
+  if (!video || HERO_STARTUP_STALL_RUNTIME.suppressed === true) {
+    return;
+  }
+  HERO_STARTUP_STALL_RUNTIME.previousPreload = (
+    typeof video.preload === 'string' && video.preload.trim().length > 0
+  )
+    ? video.preload.trim()
+    : 'auto';
+  try {
+    video.pause();
+  } catch (_error) {
+    // Ignore pause failures while suppressing startup loading.
+  }
+  video.preload = 'none';
+  video.removeAttribute('src');
+  video.src = '';
+  try {
+    video.load();
+  } catch (_error) {
+    // Ignore load errors while forcing media reset.
+  }
+  HERO_STARTUP_STALL_RUNTIME.suppressed = true;
+}
+
+function restoreHeroVideoLoadingAfterSplashHintTestStall() {
+  if (!video || HERO_STARTUP_STALL_RUNTIME.suppressed !== true) {
+    return;
+  }
+  video.preload = HERO_STARTUP_STALL_RUNTIME.previousPreload || 'auto';
+  HERO_STARTUP_STALL_RUNTIME.suppressed = false;
+  const candidates = HERO_VIDEO_SOURCE_RUNTIME.candidates;
+  if (!Array.isArray(candidates) || candidates.length <= 0) {
+    return;
+  }
+  const activeIndex = Number.isFinite(HERO_VIDEO_SOURCE_RUNTIME.activeIndex)
+    ? Math.floor(HERO_VIDEO_SOURCE_RUNTIME.activeIndex)
+    : 0;
+  const safeIndex = clamp(activeIndex, 0, candidates.length - 1);
+  setHeroVideoSourceByIndex(safeIndex, { forceLoad: false });
+}
+
 function resolveFoliageVideoSourcePath(videoType) {
   const config = CONFIG.foliageVideos;
   if (!config || !config.enabled) {
     return null;
   }
-  const videoConfig = resolveFoliageVideoConfigForType(videoType, config);
+  let videoConfig = resolveFoliageVideoConfigForType(videoType, config);
+  if (isLiteModeActive()) {
+    const liteConfig = resolveLiteModeConfig();
+    const foliageOverrides = (
+      liteConfig
+      && liteConfig.videoOverrides
+      && liteConfig.videoOverrides.foliage
+      && typeof liteConfig.videoOverrides.foliage === 'object'
+    )
+      ? liteConfig.videoOverrides.foliage
+      : null;
+    if (foliageOverrides) {
+      if (videoType === 'lower' && foliageOverrides.lowerVideo && typeof foliageOverrides.lowerVideo === 'object') {
+        videoConfig = foliageOverrides.lowerVideo;
+      } else if (videoType === 'upper') {
+        const mode = resolveFoliageVideoMode(config);
+        if (mode === FOLIAGE_VIDEO_MODE_COMBINED) {
+          if (foliageOverrides.combinedVideo && typeof foliageOverrides.combinedVideo === 'object') {
+            videoConfig = foliageOverrides.combinedVideo;
+          }
+        } else if (foliageOverrides.upperVideo && typeof foliageOverrides.upperVideo === 'object') {
+          videoConfig = foliageOverrides.upperVideo;
+        }
+      }
+    }
+  }
   if (!videoConfig) {
     return null;
   }
-  if (shouldUseAppleVideoSourceFamily()) {
-    return videoConfig.mov || null;
-  }
-  return videoConfig.webm || null;
+  const preferredPath = resolveVideoSourcePathForFormat(
+    videoConfig,
+    shouldUseAppleVideoSourceFamily() ? 'mov' : 'webm',
+  );
+  return typeof preferredPath === 'string' && preferredPath.trim().length > 0
+    ? preferredPath
+    : null;
 }
 
 function buildFoliageVideoSourceCandidates(videoType) {
@@ -2388,31 +2996,38 @@ function buildFoliageVideoSourceCandidates(videoType) {
   if (!videoConfig) {
     return [];
   }
-  const preferredPath = normalizeHostedAssetPath(resolveFoliageVideoSourcePath(videoType));
+  let effectiveVideoConfig = videoConfig;
+  if (isLiteModeActive()) {
+    const liteConfig = resolveLiteModeConfig();
+    const foliageOverrides = (
+      liteConfig
+      && liteConfig.videoOverrides
+      && liteConfig.videoOverrides.foliage
+      && typeof liteConfig.videoOverrides.foliage === 'object'
+    )
+      ? liteConfig.videoOverrides.foliage
+      : null;
+    if (foliageOverrides) {
+      if (videoType === 'lower' && foliageOverrides.lowerVideo && typeof foliageOverrides.lowerVideo === 'object') {
+        effectiveVideoConfig = foliageOverrides.lowerVideo;
+      } else if (videoType === 'upper') {
+        const mode = resolveFoliageVideoMode(config);
+        if (mode === FOLIAGE_VIDEO_MODE_COMBINED) {
+          if (foliageOverrides.combinedVideo && typeof foliageOverrides.combinedVideo === 'object') {
+            effectiveVideoConfig = foliageOverrides.combinedVideo;
+          }
+        } else if (foliageOverrides.upperVideo && typeof foliageOverrides.upperVideo === 'object') {
+          effectiveVideoConfig = foliageOverrides.upperVideo;
+        }
+      }
+    }
+  }
   const candidates = [];
-  if (typeof preferredPath === 'string' && preferredPath.trim().length > 0) {
-    candidates.push(preferredPath.trim());
-  }
-  if (typeof videoConfig.webm === 'string' && videoConfig.webm.trim().length > 0) {
-    const normalizedWebmPath = normalizeHostedAssetPath(videoConfig.webm.trim());
-    if (
-      typeof normalizedWebmPath === 'string'
-      && normalizedWebmPath.trim().length > 0
-      && !candidates.includes(normalizedWebmPath.trim())
-    ) {
-      candidates.push(normalizedWebmPath.trim());
-    }
-  }
-  if (typeof videoConfig.mov === 'string' && videoConfig.mov.trim().length > 0) {
-    const normalizedMovPath = normalizeHostedAssetPath(videoConfig.mov.trim());
-    if (
-      typeof normalizedMovPath === 'string'
-      && normalizedMovPath.trim().length > 0
-      && !candidates.includes(normalizedMovPath.trim())
-    ) {
-      candidates.push(normalizedMovPath.trim());
-    }
-  }
+  appendVideoVariantPathsByPreferredFormat(
+    candidates,
+    effectiveVideoConfig,
+    shouldUseAppleVideoSourceFamily(),
+  );
   return candidates;
 }
 
@@ -2465,7 +3080,7 @@ function setFoliageVideoSourceByIndex(videoType, index, options = {}) {
     return false;
   }
   const safeOptions = (options && typeof options === 'object') ? options : {};
-  const shouldForceLoad = safeOptions.forceLoad !== false;
+  const shouldForceLoad = safeOptions.forceLoad === true;
   const nextPath = candidates[index].trim();
   runtime.activeIndex = index;
   videoEl.setAttribute('data-foliage-video-source-path', nextPath);
@@ -2479,6 +3094,63 @@ function setFoliageVideoSourceByIndex(videoType, index, options = {}) {
     }
   }
   return true;
+}
+
+function promoteFoliageVideoPreloadAfterHeroReady(reason = 'hero-ready') {
+  const config = CONFIG && CONFIG.foliageVideos ? CONFIG.foliageVideos : null;
+  if (!config || config.enabled !== true || FOLIAGE_VIDEO_PRELOAD_RUNTIME.promotedToAuto === true) {
+    return false;
+  }
+  if (!isInitialHeroVideoReadyForStartup()) {
+    return false;
+  }
+  const activeTypes = getActiveFoliageVideoTypes(config);
+  for (let i = 0; i < activeTypes.length; i += 1) {
+    const videoType = activeTypes[i];
+    const videoEl = getFoliageVideoElementByType(videoType);
+    if (!videoEl) {
+      continue;
+    }
+    videoEl.preload = 'auto';
+    if (typeof videoEl.load === 'function') {
+      try {
+        videoEl.load();
+      } catch (_error) {
+        // Ignore load() exceptions and rely on media events.
+      }
+    }
+  }
+  FOLIAGE_VIDEO_PRELOAD_RUNTIME.promotedToAuto = true;
+  if (isFoliagePlaybackAuditEnabled()) {
+    console.log('[FoliageVideos] Promoted preload to auto', { reason });
+  }
+  return true;
+}
+
+function installFoliagePreloadPromotionAfterHeroReady() {
+  const config = CONFIG && CONFIG.foliageVideos ? CONFIG.foliageVideos : null;
+  if (!config || config.enabled !== true || FOLIAGE_VIDEO_PRELOAD_RUNTIME.listenersInstalled === true) {
+    return;
+  }
+  FOLIAGE_VIDEO_PRELOAD_RUNTIME.listenersInstalled = true;
+  if (promoteFoliageVideoPreloadAfterHeroReady('hero-ready-sync')) {
+    return;
+  }
+  const tryPromote = () => {
+    if (!isInitialHeroVideoReadyForStartup()) {
+      return;
+    }
+    cleanup();
+    promoteFoliageVideoPreloadAfterHeroReady('hero-ready-event');
+  };
+  const cleanup = () => {
+    video.removeEventListener('loadeddata', tryPromote);
+    video.removeEventListener('canplay', tryPromote);
+    video.removeEventListener('playing', tryPromote);
+  };
+  video.addEventListener('loadeddata', tryPromote);
+  video.addEventListener('canplay', tryPromote);
+  video.addEventListener('playing', tryPromote);
 }
 
 function readFoliageVideoMediaErrorLabel(videoEl) {
@@ -2693,7 +3365,7 @@ function configureFoliageVideoElement(videoType) {
 
   videoEl.id = videoId;
   videoEl.controls = false;
-  videoEl.preload = 'auto';
+  videoEl.preload = 'metadata';
   videoEl.muted = true;
   videoEl.autoplay = false;
   videoEl.playsInline = true;
@@ -2728,7 +3400,8 @@ function configureFoliageVideoElement(videoType) {
   runtime.candidates = buildFoliageVideoSourceCandidates(videoType);
   runtime.activeIndex = -1;
   runtime.fallbackUsed = false;
-  setFoliageVideoSourceByIndex(videoType, 0, { forceLoad: true });
+  setFoliageVideoSourceByIndex(videoType, 0, { forceLoad: false });
+  installFoliagePreloadPromotionAfterHeroReady();
 
   // console.log(`[FoliageVideo${videoType}] Configured with sources:`, runtime.candidates);
 
@@ -2853,7 +3526,49 @@ function showFoliageVideos() {
 
 let foliageVideosEndedCount = 0;
 
+function freezeFoliageVideosOnCurrentFrame(reason = 'lite-mode-ended') {
+  const config = CONFIG && CONFIG.foliageVideos ? CONFIG.foliageVideos : null;
+  const activeTypes = getActiveFoliageVideoTypes(config);
+  stopFoliageSyncLoop();
+  clearFoliageVideoHandoffTimeout(FOLIAGE_VIDEO_HANDOFF_RUNTIME);
+  FOLIAGE_VIDEO_HANDOFF_RUNTIME.inProgress = false;
+  FOLIAGE_VIDEO_HANDOFF_RUNTIME.completed = false;
+  for (let i = 0; i < activeTypes.length; i += 1) {
+    const videoType = activeTypes[i];
+    const videoEl = getFoliageVideoElementByType(videoType);
+    if (!videoEl) {
+      continue;
+    }
+    if (Number.isFinite(videoEl.duration) && videoEl.duration > 0) {
+      try {
+        videoEl.currentTime = Math.max(0, videoEl.duration - 0.001);
+      } catch (_error) {
+        // Ignore seek exceptions while freezing.
+      }
+    }
+    try {
+      videoEl.pause();
+    } catch (_error) {
+      // Ignore pause exceptions while freezing.
+    }
+    videoEl.style.display = 'block';
+    videoEl.style.visibility = 'visible';
+  }
+  hideFoliageCanvases();
+  if (isLiteModeActive()) {
+    applyLiteModeCanvasVisibility();
+  }
+  foliageVideosEndedCount = 0;
+  if (isFoliagePlaybackAuditEnabled()) {
+    console.log('[FoliageVideos] Freeze-on-end active', { reason });
+  }
+}
+
 function requestFoliageVideoToCanvasHandoff(reason = 'unknown', options = {}) {
+  if (isFoliageVideoFreezeOnEndActive()) {
+    freezeFoliageVideosOnCurrentFrame(`handoff-suppressed:${reason}`);
+    return;
+  }
   const safeOptions = (options && typeof options === 'object') ? options : {};
   const force = safeOptions.force === true;
   const runtime = FOLIAGE_VIDEO_HANDOFF_RUNTIME;
@@ -2932,6 +3647,10 @@ function checkBothFoliageVideosEnded() {
   }
   foliageVideosEndedCount += 1;
   if (foliageVideosEndedCount >= expectedEndedCount) {
+    if (isFoliageVideoFreezeOnEndActive()) {
+      freezeFoliageVideosOnCurrentFrame('both-ended');
+      return;
+    }
     requestFoliageVideoToCanvasHandoff('both-ended', { force: true });
   }
 }
@@ -2949,17 +3668,21 @@ function startFoliageVideos() {
   resetFoliageVideoHandoffRuntime();
   stopFoliageSyncLoop();
   hideFoliageCanvases();
+  if (isLiteModeActive()) {
+    applyLiteModeCanvasVisibility();
+  }
   foliageVideosEndedCount = 0;
+  promoteFoliageVideoPreloadAfterHeroReady('start-foliage-videos');
 
   // console.log('[FoliageVideos] Starting playback with speed:', playbackSpeed);
 
   // Keep seeds anchored to the current hero rect when foliage videos start.
-  const seedSyncResult = syncSeedPacketToCurrentHeroRect({
+  const seedSyncResult = STATE.branchGarden ? syncSeedPacketToCurrentHeroRect({
     reason: 'foliage-videos-start',
     forceRectRefresh: true,
     thresholdPx: 0.5,
     preserveActiveGrowth: true,
-  });
+  }) : null;
   if (seedSyncResult && seedSyncResult.applied === true) {
     console.log('[FoliageVideos] Seed packet sync applied:', seedSyncResult.reason);
   }
@@ -4003,6 +4726,12 @@ const CONFIG = (
 if (!CONFIG) {
   throw new Error('Missing user config object. Make sure script_11.user.config.js loads before script_11.js.');
 }
+
+// Apply lite-mode overrides BEFORE any other CONFIG-derived logic runs so
+// every downstream resolver sees the overridden values (e.g. branchGrowth
+// disabled, jump sparkle disabled, DPR capped).
+applyLiteModeConfigOverrides();
+applyLiteModeCanvasVisibility();
 
 applyLoadingScreenConfig(CONFIG.loadingScreen);
 applyConfiguredPageBackground(CONFIG.pageBackground);
@@ -5721,6 +6450,7 @@ function isLikelyUnsupportedHeroVideoSource() {
 
 function waitForInitialHeroVideoReadyForStartup() {
   if (isInitialHeroVideoReadyForStartup()) {
+    promoteFoliageVideoPreloadAfterHeroReady('startup-ready-immediate');
     return Promise.resolve({ ready: true, unsupported: false });
   }
   if (isLikelyUnsupportedHeroVideoSource()) {
@@ -5735,6 +6465,7 @@ function waitForInitialHeroVideoReadyForStartup() {
         return;
       }
       cleanup();
+      promoteFoliageVideoPreloadAfterHeroReady('startup-ready-event');
       resolve({ ready: true, unsupported: false });
     };
     const onError = () => {
@@ -5763,6 +6494,55 @@ function waitForInitialHeroVideoReadyForStartup() {
     } catch (_error) {
       // Ignore load() errors and rely on normal media events.
     }
+  });
+}
+
+function waitForInitialHeroVideoReadyForStartupWithTimeout(timeoutMs = resolveHeroStartupWaitTimeoutMs()) {
+  const safeTimeoutMs = Number.isFinite(Number(timeoutMs))
+    ? Math.max(0, Number(timeoutMs))
+    : 0;
+  if (!(safeTimeoutMs > 0)) {
+    return waitForInitialHeroVideoReadyForStartup().then((status) => ({
+      ...(status || {}),
+      timedOut: false,
+    }));
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (status) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutId);
+      const safeStatus = status && typeof status === 'object' ? status : {};
+      resolve({
+        ready: safeStatus.ready === true,
+        unsupported: safeStatus.unsupported === true,
+        timedOut: safeStatus.timedOut === true,
+      });
+    };
+    const timeoutId = window.setTimeout(() => {
+      settle({
+        ready: isInitialHeroVideoReadyForStartup(),
+        unsupported: false,
+        timedOut: true,
+      });
+    }, safeTimeoutMs);
+    waitForInitialHeroVideoReadyForStartup()
+      .then((status) => {
+        settle({
+          ...(status || {}),
+          timedOut: false,
+        });
+      })
+      .catch(() => {
+        settle({
+          ready: false,
+          unsupported: false,
+          timedOut: false,
+        });
+      });
   });
 }
 
@@ -10812,6 +11592,9 @@ function resolveEffectiveRenderDpr() {
   const rawDpr = Number.isFinite(window.devicePixelRatio)
     ? Math.max(0.1, window.devicePixelRatio)
     : 1;
+  if (isLiteModeActive()) {
+    return Math.max(0.1, Math.min(rawDpr, 1));
+  }
   const renderDprConfig = resolveRenderDprConfig();
   if (renderDprConfig.enabled !== true) {
     return rawDpr;
@@ -22538,6 +23321,32 @@ function drawOverlayBranchRangeWithStemCache(options = {}) {
 function renderScene(options = {}) {
   if (!STATE.branchGarden || !STATE.stemImage) {
     cancelFlowerInteractionFrame();
+    const heroPlaybackGateConfig = resolveHeroPlaybackGateConfig();
+    const heroPlaybackFrame = getCurrentHeroVideoFrame(heroPlaybackGateConfig);
+    const overlayNowMs = performance.now();
+    syncCenterOverlayImageLayer(overlayNowMs, heroPlaybackFrame);
+    syncRsvpLayer(overlayNowMs);
+    syncSection2ButtonLayer(overlayNowMs);
+    syncSection1LabelLayer(overlayNowMs);
+    syncJumpSparkleLayer(overlayNowMs);
+    syncSectionStylingLayers(overlayNowMs, heroPlaybackFrame);
+    syncSafariTopTintColor();
+    syncWash1Layer(heroPlaybackFrame);
+    syncWash2Layer(heroPlaybackFrame);
+    if (enforceHeroPlaybackGatePauseFrames(heroPlaybackFrame, heroPlaybackGateConfig, { rerenderOnPause: false })) {
+      const pausedNowMs = performance.now();
+      const pausedFrame = getCurrentHeroVideoFrame(heroPlaybackGateConfig);
+      syncSwipeSectionsStateWithConfig({
+        forceToClosestFrame: true,
+        emitEvent: false,
+        reason: 'heroGatePauseResyncNoCanvas',
+      });
+      syncCenterOverlayImageLayer(pausedNowMs, pausedFrame);
+      syncSection1LabelLayer(pausedNowMs);
+      syncSwipeSectionsScrollHintLayer(pausedNowMs);
+      return;
+    }
+    syncSwipeSectionsScrollHintLayer(overlayNowMs);
     return;
   }
   if (syncGlobalFoliageScaleIfNeeded()) {
@@ -24517,6 +25326,10 @@ function resolveJumpSparklePrimarySourcePath(safeConfig = {}) {
   return './sparkle_003';
 }
 
+function isJumpSparkleSuppressedForLiteMode() {
+  return isLiteModeActive();
+}
+
 function resolveJumpSparkleConfig(flowersConfig = CONFIG.flowers || {}) {
   const safeFlowersConfig = isPlainObjectLiteral(flowersConfig) ? flowersConfig : {};
   const safeConfig = isPlainObjectLiteral(safeFlowersConfig.jumpSparkle)
@@ -24581,7 +25394,7 @@ function resolveJumpSparkleConfig(flowersConfig = CONFIG.flowers || {}) {
   };
 
   return {
-    enabled: safeConfig.enabled === true,
+    enabled: safeConfig.enabled === true && !isJumpSparkleSuppressedForLiteMode(),
     renderer: configuredRenderer,
     effectiveRenderer,
     rendererSwitchForced,
@@ -25452,8 +26265,11 @@ function createJumpSparkleInstance() {
 }
 
 function ensureJumpSparkleInstancePool(sparkleConfig) {
+  if (isJumpSparkleSuppressedForLiteMode()) {
+    return [];
+  }
   const runtime = getJumpSparkleRuntimeState();
-  const safeConfig = sparkleConfig || resolveJumpSparkleConfig();
+  void sparkleConfig;
   const desiredCount = 1;
   while (runtime.instances.length < desiredCount) {
     runtime.instances.push(createJumpSparkleInstance());
@@ -25466,13 +26282,6 @@ function ensureJumpSparkleInstancePool(sparkleConfig) {
     deactivateJumpSparkleInstance(instance);
     if (instance.videoEl && instance.videoEl.parentElement) {
       instance.videoEl.parentElement.removeChild(instance.videoEl);
-    }
-  }
-  const preloadPaths = resolveJumpSparklePlaybackPaths(safeConfig);
-  if (runtime.instances.length > 0 && preloadPaths && preloadPaths.preferredPath) {
-    const preloadInstance = runtime.instances[0];
-    if (preloadInstance && preloadInstance.active !== true) {
-      setJumpSparkleInstanceSource(preloadInstance, preloadPaths.preferredPath, { forceReload: false });
     }
   }
   return runtime.instances;
@@ -25795,6 +26604,9 @@ function shouldSkipSparkleDueToInputDedupe(event, sparkleConfig, nowMs = perform
 }
 
 function activateJumpSparkleInstance(target, sparkleConfig, nowMs = performance.now()) {
+  if (isJumpSparkleSuppressedForLiteMode()) {
+    return false;
+  }
   if (!target || !sparkleConfig || sparkleConfig.enabled !== true) {
     return false;
   }
@@ -25896,6 +26708,9 @@ function activateJumpSparkleInstance(target, sparkleConfig, nowMs = performance.
 }
 
 function triggerJumpSparkleFromJumpResult(jumpResult, event, flowersConfig = CONFIG.flowers || {}) {
+  if (isJumpSparkleSuppressedForLiteMode()) {
+    return false;
+  }
   const sparkleConfig = resolveJumpSparkleConfig(flowersConfig);
   if (sparkleConfig.enabled !== true) {
     return false;
@@ -25947,6 +26762,17 @@ function triggerJumpSparkleFromJumpResult(jumpResult, event, flowersConfig = CON
 function syncJumpSparkleLayer(nowMs = performance.now()) {
   const sparkleConfig = resolveJumpSparkleConfig();
   const runtime = getJumpSparkleRuntimeState();
+  if (isJumpSparkleSuppressedForLiteMode()) {
+    if (Array.isArray(runtime.instances)) {
+      for (let i = 0; i < runtime.instances.length; i += 1) {
+        deactivateJumpSparkleInstance(runtime.instances[i]);
+      }
+    }
+    clearJumpSparkleCanvasLayer(jumpSparkleBackCtx);
+    clearJumpSparkleCanvasLayer(jumpSparkleFrontCtx);
+    setJumpSparkleLayerVisibility(false, false, sparkleConfig);
+    return;
+  }
   const sparkleAllowedByFoliageVisibility = isJumpSparkleAllowedByFoliageVisibility();
   const useCanvasRenderer = sparkleConfig.effectiveRenderer === 'canvas';
   jumpSparkleBackCanvas.style.mixBlendMode = 'normal';
@@ -27832,6 +28658,7 @@ async function bootstrap() {
   clearViewportPostZoomResyncTimer();
   postZoomViewportRecoveryActive = false;
   viewportPinchZoomWasActive = false;
+  const liteModeActive = isLiteModeActive();
   const defaultLoadingMessage = getDefaultLoadingScreenMessage();
   setLoadingScreenVisible(true);
   setLoadingScreenMessage(defaultLoadingMessage);
@@ -27852,15 +28679,29 @@ async function bootstrap() {
   refreshHeroVideoReferenceRect({ force: true });
   applyViewportLayoutMode(STATE.viewportLayoutMode, { forceRerender: true });
   scheduleIOSRelative166ViewportStabilization();
+  if (liteModeActive) {
+    applyLiteModeCanvasVisibility();
+  }
   
   STATE.foliageLoad.videoReady = false;
   STATE.foliageLoad.stemReady = false;
   STATE.foliageLoad.leafReady = false;
   STATE.foliageLoad.flowerReady = false;
   STATE.foliageLoad.ready = false;
+  await runLiteModeSplashHintTestStallIfNeeded();
   setLoadingScreenMessage(defaultLoadingMessage);
-  const initialVideoStatus = await waitForInitialHeroVideoReadyForStartup();
+  const initialVideoStatus = await waitForInitialHeroVideoReadyForStartupWithTimeout();
+  if (initialVideoStatus && initialVideoStatus.timedOut === true) {
+    showLoadingLiteModeHint({
+      force: true,
+      emphasize: true,
+      requireHeroReadyCheck: false,
+    });
+  }
   STATE.foliageLoad.videoReady = Boolean(initialVideoStatus && initialVideoStatus.ready);
+  if (STATE.foliageLoad.videoReady) {
+    promoteFoliageVideoPreloadAfterHeroReady('bootstrap-hero-ready');
+  }
   refreshHeroVideoReferenceRect({ force: true });
   rerunIOSRelative166ViewportLayout();
   scheduleIOSRelative166ViewportStabilization();
@@ -27872,37 +28713,47 @@ async function bootstrap() {
     }
   }
 
-  if (
-    window.StemWarpFlowerSystem11
-    && typeof window.StemWarpFlowerSystem11.createFlowerSystem === 'function'
-  ) {
-    STATE.flowerSystem = window.StemWarpFlowerSystem11.createFlowerSystem();
-    if (STATE.flowerSystem && typeof STATE.flowerSystem.setPixiSurfaces === 'function') {
-      STATE.flowerSystem.setPixiSurfaces({
-        backCanvas: flowersBackCanvas,
-        frontCanvas: flowersFrontCanvas,
-      });
+  if (!liteModeActive) {
+    if (
+      window.StemWarpFlowerSystem11
+      && typeof window.StemWarpFlowerSystem11.createFlowerSystem === 'function'
+    ) {
+      STATE.flowerSystem = window.StemWarpFlowerSystem11.createFlowerSystem();
+      if (STATE.flowerSystem && typeof STATE.flowerSystem.setPixiSurfaces === 'function') {
+        STATE.flowerSystem.setPixiSurfaces({
+          backCanvas: flowersBackCanvas,
+          frontCanvas: flowersFrontCanvas,
+        });
+      }
+    } else {
+      console.warn('Flower system module missing (script_11_flowers.js). Flowers are disabled.');
     }
+
+    // Immediate fallback stem so first paint is not blocked on network.
+    STATE.stemImage = createFallbackStemTexture();
+    STATE.stemImageFlippedX = createHorizontallyFlippedTexture(STATE.stemImage);
+    STATE.leafImage = null;
+    setFoliageLoadReadyFlag('stemReady', true);
+    resetFilteredStemTextureCache();
+    await loadManualTemplateSources();
+    STATE.branchGarden = new BranchGarden();
+
+    // Optional center branch.
+    // STATE.branchGarden.addBranch(STATE.viewportWidth * 0.5, STATE.viewportHeight * 0.9, -1);
+
+    // Plant many side branches from seeds.
+    STATE.lastSeedPacket = setSeeds();
+    plantSeeds(STATE.lastSeedPacket, { clearFirst: true });
+    refreshSeedCanonicalBaselineFromLastPacket({ forceRectRefresh: true });
   } else {
-    console.warn('Flower system module missing (script_11_flowers.js). Flowers are disabled.');
+    STATE.flowerSystem = null;
+    STATE.stemImage = null;
+    STATE.stemImageFlippedX = null;
+    STATE.leafImage = null;
+    setFoliageLoadReadyFlag('stemReady', true);
+    setFoliageLoadReadyFlag('leafReady', true);
+    setFoliageLoadReadyFlag('flowerReady', true);
   }
-
-  // Immediate fallback stem so first paint is not blocked on network.
-  STATE.stemImage = createFallbackStemTexture();
-  STATE.stemImageFlippedX = createHorizontallyFlippedTexture(STATE.stemImage);
-  STATE.leafImage = null;
-  setFoliageLoadReadyFlag('stemReady', true);
-  resetFilteredStemTextureCache();
-  await loadManualTemplateSources();
-  STATE.branchGarden = new BranchGarden();
-
-  // Optional center branch.
-  // STATE.branchGarden.addBranch(STATE.viewportWidth * 0.5, STATE.viewportHeight * 0.9, -1);
-
-  // Plant many side branches from seeds.
-  STATE.lastSeedPacket = setSeeds();
-  plantSeeds(STATE.lastSeedPacket, { clearFirst: true });
-  refreshSeedCanonicalBaselineFromLastPacket({ forceRectRefresh: true });
 
   if (CONFIG.performance.enabled) {
     resetPerformanceCounters();
@@ -27916,51 +28767,56 @@ async function bootstrap() {
   });
   startHeroPlaybackGateFlow();
   renderScene();
+  if (liteModeActive) {
+    applyLiteModeCanvasVisibility();
+  }
   applyViewportScrollNudgeIfNeeded();
   setupEventHandlers();
   exposeDevToolsApi();
   setLoadingScreenMessage(defaultLoadingMessage);
   // Load heavier visual assets in the background and progressively upgrade.
-  loadStemTexture()
-    .then((stemTexture) => {
-      if (!stemTexture) {
-        return;
-      }
-      STATE.stemImage = stemTexture;
-      STATE.stemImageFlippedX = createHorizontallyFlippedTexture(stemTexture);
-      setFoliageLoadReadyFlag('stemReady', true);
-      resetFilteredStemTextureCache();
-      invalidateAllBranchStripCaches();
-      invalidateCompletedBranchLayer();
-      renderScene({ skipAutoStart: true });
-    })
-    .catch((error) => {
-      console.warn(error.message || String(error));
-      setFoliageLoadReadyFlag('stemReady', true);
-    });
+  if (!liteModeActive) {
+    loadStemTexture()
+      .then((stemTexture) => {
+        if (!stemTexture) {
+          return;
+        }
+        STATE.stemImage = stemTexture;
+        STATE.stemImageFlippedX = createHorizontallyFlippedTexture(stemTexture);
+        setFoliageLoadReadyFlag('stemReady', true);
+        resetFilteredStemTextureCache();
+        invalidateAllBranchStripCaches();
+        invalidateCompletedBranchLayer();
+        renderScene({ skipAutoStart: true });
+      })
+      .catch((error) => {
+        console.warn(error.message || String(error));
+        setFoliageLoadReadyFlag('stemReady', true);
+      });
 
-  loadLeafTexture(CONFIG.leaves || {})
-    .then((leafTexture) => {
-      STATE.leafImage = leafTexture;
-      setFoliageLoadReadyFlag('leafReady', true);
-      invalidateCompletedBranchLayer();
-      renderScene({ skipAutoStart: true });
-    })
-    .catch((error) => {
-      console.warn(error.message || String(error));
-      setFoliageLoadReadyFlag('leafReady', true);
-    });
+    loadLeafTexture(CONFIG.leaves || {})
+      .then((leafTexture) => {
+        STATE.leafImage = leafTexture;
+        setFoliageLoadReadyFlag('leafReady', true);
+        invalidateCompletedBranchLayer();
+        renderScene({ skipAutoStart: true });
+      })
+      .catch((error) => {
+        console.warn(error.message || String(error));
+        setFoliageLoadReadyFlag('leafReady', true);
+      });
 
-  loadFlowerSpriteIntoSystem()
-    .then(() => {
-      setFoliageLoadReadyFlag('flowerReady', true);
-      invalidateCompletedBranchLayer();
-      renderScene({ skipAutoStart: true });
-    })
-    .catch((error) => {
-      console.warn(error.message || String(error));
-      setFoliageLoadReadyFlag('flowerReady', true);
-    });
+    loadFlowerSpriteIntoSystem()
+      .then(() => {
+        setFoliageLoadReadyFlag('flowerReady', true);
+        invalidateCompletedBranchLayer();
+        renderScene({ skipAutoStart: true });
+      })
+      .catch((error) => {
+        console.warn(error.message || String(error));
+        setFoliageLoadReadyFlag('flowerReady', true);
+      });
+  }
   // createPathGenerationControls();
   // createOffshootControls();
 }
