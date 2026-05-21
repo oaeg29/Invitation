@@ -339,7 +339,7 @@
       mov: './smallGrowBloom_upper_foriOS.mov',
     },
     combinedVideo: {
-      webm: './foliage_vid_combined.webm',
+      webm: './foliage_vid_combined_lite.webm',
       mov: './foliage_vid_combined.mov',
     },
   },

@@ -2362,6 +2362,45 @@ function resolveTopBarColorSyncColorBySectionId(
   return parsedMappedColor ? rgbColorToCss(parsedMappedColor) : null;
 }
 
+function resolveLiteTopBarColorSyncVisualSectionIndex(
+  swipeConfig = resolveSwipeSectionsConfig(),
+  swipeState = STATE && STATE.swipeSections ? STATE.swipeSections : null,
+  frame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig()),
+) {
+  const sections = swipeConfig && Array.isArray(swipeConfig.sections) ? swipeConfig.sections : [];
+  if (sections.length <= 0) {
+    return -1;
+  }
+
+  const visualSectionIdRaw = (
+    sectionStylingBackgroundLayer
+    && sectionStylingBackgroundLayer.dataset
+    && typeof sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId === 'string'
+  )
+    ? sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId
+    : '';
+  const visualSectionId = visualSectionIdRaw.trim();
+  if (visualSectionId.length > 0) {
+    for (let i = 0; i < sections.length; i += 1) {
+      const section = sections[i];
+      if (section && typeof section.id === 'string' && section.id === visualSectionId) {
+        return i;
+      }
+    }
+  }
+
+  if (
+    swipeState
+    && Number.isFinite(swipeState.activeSectionIndex)
+    && swipeState.activeSectionIndex >= 0
+    && swipeState.activeSectionIndex < sections.length
+  ) {
+    return Math.floor(swipeState.activeSectionIndex);
+  }
+
+  return findClosestSwipeSectionIndexToFrame(frame, swipeConfig);
+}
+
 function resolveTopBarColorSyncTintState(
   swipeConfig = resolveSwipeSectionsConfig(),
   topBarColorSyncConfig = resolveTopBarColorSyncConfig(),
@@ -2436,8 +2475,12 @@ function resolveTopBarColorSyncTintState(
   const currentFrame = getCurrentHeroVideoFrame(resolveHeroPlaybackGateConfig());
   let activeSectionIndex = -1;
   if (isLiteModeActive()) {
-    // In lite mode, keep top tint in lockstep with what is currently on screen.
-    activeSectionIndex = findClosestSwipeSectionIndexToFrame(currentFrame, swipeConfig);
+    // Keep lite tint source aligned with the section styling layer's current visual section.
+    activeSectionIndex = resolveLiteTopBarColorSyncVisualSectionIndex(
+      swipeConfig,
+      swipeState,
+      currentFrame,
+    );
   } else {
     activeSectionIndex = Number.isFinite(swipeState.activeSectionIndex)
       ? Math.floor(swipeState.activeSectionIndex)
