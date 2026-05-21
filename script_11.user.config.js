@@ -55,7 +55,7 @@
         combinedVideo: {
           webm: './foliage_vid_combined_lite.webm',
           webmFallback: './foliage_vid_combined.webm',
-          mov: './foliage_vid_combined_lite.mov',
+          mov: './foliage_vid_combined.mov',
           movFallback: './foliage_vid_combined.mov',
         },
       },
@@ -757,7 +757,7 @@
             color: 'rgb(255, 255, 255)',
             media: {
               type: 'image',
-              path: '0',
+              path: '',
               opacity: 0.14,
             },
           },
