@@ -6952,6 +6952,18 @@ function isFoliageReadyForGrowth() {
   return Boolean(STATE.foliageLoad && STATE.foliageLoad.ready === true);
 }
 
+function maybeDismissLoadingScreenAfterStartupReadiness() {
+  const loadState = STATE && STATE.foliageLoad ? STATE.foliageLoad : null;
+  if (!loadState || loadState.ready !== true) {
+    return false;
+  }
+  if (isLiteModeActive() && !isInitialHeroVideoReadyForStartup()) {
+    return false;
+  }
+  setLoadingScreenVisible(false);
+  return true;
+}
+
 function setFoliageLoadReadyFlag(flagName, isReady) {
   const loadState = STATE.foliageLoad;
   if (!loadState || typeof flagName !== 'string' || !(flagName in loadState)) {
@@ -6970,7 +6982,7 @@ function setFoliageLoadReadyFlag(flagName, isReady) {
   if (STATE.branchGarden) {
     renderScene();
   }
-  setLoadingScreenVisible(false);
+  maybeDismissLoadingScreenAfterStartupReadiness();
 }
 
 function isInitialHeroVideoReadyForStartup() {
@@ -25630,6 +25642,7 @@ function onHeroVideoMetadataLoaded() {
   }
   refreshHeroVideoReferenceRect({ force: true });
   applyHeroVideoWiggleAnchor(resolveHeroPlaybackGateConfig());
+  maybeDismissLoadingScreenAfterStartupReadiness();
   renderScene({ skipAutoStart: true });
   rerunIOSRelative166ViewportLayout();
   scheduleIOSRelative166ViewportStabilization();
@@ -25638,6 +25651,7 @@ function onHeroVideoMetadataLoaded() {
 function onHeroVideoLoadedDataOrCanPlay() {
   rerunIOSRelative166ViewportLayout();
   scheduleIOSRelative166ViewportStabilization();
+  maybeDismissLoadingScreenAfterStartupReadiness();
 }
 
 function onWindowLoadViewportLayoutStabilization() {
