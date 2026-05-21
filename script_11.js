@@ -2575,6 +2575,40 @@ function resolveTopBarColorSyncColorBySectionId(
   return parsedMappedColor ? rgbColorToCss(parsedMappedColor) : null;
 }
 
+function isValidSwipeSectionTransitionState(
+  swipeState = STATE && STATE.swipeSections ? STATE.swipeSections : null,
+  sections = resolveSwipeSectionsConfig().sections,
+) {
+  const safeSections = Array.isArray(sections) ? sections : [];
+  return Boolean(
+    swipeState
+    && swipeState.isTransitioning === true
+    && Number.isFinite(swipeState.transitionFromSectionIndex)
+    && Number.isFinite(swipeState.transitionToSectionIndex)
+    && swipeState.transitionFromSectionIndex >= 0
+    && swipeState.transitionFromSectionIndex < safeSections.length
+    && swipeState.transitionToSectionIndex >= 0
+    && swipeState.transitionToSectionIndex < safeSections.length
+  );
+}
+
+function shouldUseSafariLiteIncomingTopBarTintDuringTransition(
+  swipeState = STATE && STATE.swipeSections ? STATE.swipeSections : null,
+  sections = resolveSwipeSectionsConfig().sections,
+  hasValidTransition = null,
+) {
+  if (!isLiteModeActive() || !isLikelySafariOnIOS()) {
+    return false;
+  }
+  if (hasValidTransition === true) {
+    return true;
+  }
+  if (hasValidTransition === false) {
+    return false;
+  }
+  return isValidSwipeSectionTransitionState(swipeState, sections);
+}
+
 function resolveLiteTopBarColorSyncVisualSectionIndex(
   swipeConfig = resolveSwipeSectionsConfig(),
   swipeState = STATE && STATE.swipeSections ? STATE.swipeSections : null,
@@ -2726,6 +2760,34 @@ function resolveTopBarColorSyncTintState(
       return {
         tint: null,
         keepPrevious: true,
+      };
+    }
+    const useSafariLiteIncomingTint = shouldUseSafariLiteIncomingTopBarTintDuringTransition(
+      swipeState,
+      sections,
+      hasValidTransition,
+    );
+    if (useSafariLiteIncomingTint) {
+      topBarTintDebugLog('resolve-transition', {
+        phase: 'transition',
+        liteMode: isLiteModeActive(),
+        fromIndex: outgoingIndex,
+        toIndex: incomingIndex,
+        fromSectionId: outgoingSection && outgoingSection.id,
+        toSectionId: incomingSection && incomingSection.id,
+        fromColor: outgoingColor,
+        toColor: incomingColor,
+        progress: 1,
+        resolvedTint: incomingColor,
+        keepPrevious: false,
+        visualSectionId,
+        activeSectionIndexState: swipeState.activeSectionIndex,
+        transitioning: swipeState.isTransitioning === true,
+        safariLiteIncomingTransitionOverride: true,
+      }, topBarColorSyncConfig);
+      return {
+        tint: incomingColor,
+        keepPrevious: false,
       };
     }
     const outgoingRgb = parseCssColorToRgb(outgoingColor);
@@ -25234,6 +25296,13 @@ function startSwipeSectionTransition(targetIndex, direction, reason, swipeConfig
   swipeState.transitionDirection = direction > 0 ? 1 : (direction < 0 ? -1 : 0);
   prepareSwipeSectionOverlayTransitionForTargetSection(targetSection, durationMs, swipeConfig);
   prepareSwipeSectionStylingTransitionForTargetSection();
+  if (shouldUseSafariLiteIncomingTopBarTintDuringTransition(
+    swipeState,
+    swipeConfig.sections,
+    true,
+  )) {
+    syncSafariTopTintColor();
+  }
 
   if (!(durationMs > 1e-6) || Math.abs(toFrame - fromFrame) <= 0.2) {
     finalizeSwipeSectionTransition(safeTargetIndex, direction, reason, swipeConfig);
