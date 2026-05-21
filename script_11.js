@@ -4132,6 +4132,46 @@ function checkBothFoliageVideosEnded() {
   }
 }
 
+function playFoliageVideoWithSourceFallback(videoType, videoEl, playbackSpeed) {
+  const runtime = videoType === 'lower' ? FOLIAGE_VIDEO_SOURCE_RUNTIME.lower : FOLIAGE_VIDEO_SOURCE_RUNTIME.upper;
+  const candidates = Array.isArray(runtime && runtime.candidates) ? runtime.candidates : [];
+  const maxFallbackAdvances = Math.max(0, candidates.length - 1);
+
+  const tryPlayAtAttempt = (attemptIndex) => {
+    applyFoliagePlaybackRate(videoType, videoEl, playbackSpeed, 'start-pre-play');
+    return videoEl.play()
+      .then(() => {
+        applyFoliagePlaybackRate(videoType, videoEl, playbackSpeed, 'start-post-play');
+      })
+      .catch((err) => {
+        const mediaErrorLabel = readFoliageVideoMediaErrorLabel(videoEl);
+        const errorName = (
+          err
+          && typeof err === 'object'
+          && typeof err.name === 'string'
+          && err.name.trim().length > 0
+        )
+          ? err.name.trim()
+          : 'play-reject';
+        const advanced = (
+          attemptIndex < maxFallbackAdvances
+          && tryAdvanceFoliageVideoSourceCandidate(videoType, `play-error:${errorName}:${mediaErrorLabel}`)
+        );
+        if (!advanced) {
+          throw err;
+        }
+        try {
+          videoEl.currentTime = 0;
+        } catch (_error) {
+          // Ignore currentTime reset failures before metadata is available.
+        }
+        return tryPlayAtAttempt(attemptIndex + 1);
+      });
+  };
+
+  return tryPlayAtAttempt(0);
+}
+
 function startFoliageVideos() {
   const config = CONFIG.foliageVideos;
   if (!config || !config.enabled) {
@@ -4184,10 +4224,7 @@ function startFoliageVideos() {
     videoEl.currentTime = 0;
     videoEl.style.display = 'block';
     videoEl.style.visibility = 'visible';
-    applyFoliagePlaybackRate(videoType, videoEl, playbackSpeed, 'start-pre-play');
-    playPromises.push(videoEl.play().then(() => {
-      applyFoliagePlaybackRate(videoType, videoEl, playbackSpeed, 'start-post-play');
-    }).catch(err => {
+    playPromises.push(playFoliageVideoWithSourceFallback(videoType, videoEl, playbackSpeed).catch(err => {
       console.warn(`[FoliageVideos] Failed to play ${videoType} video:`, err);
       if (config.fallbackToFoliageOnLoadError) {
         requestFoliageVideoToCanvasHandoff(`start-failed-${videoType}`, { force: true });

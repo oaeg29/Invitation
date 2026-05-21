@@ -55,7 +55,7 @@
         combinedVideo: {
           webm: './foliage_vid_combined_lite.webm',
           webmFallback: './foliage_vid_combined.webm',
-          mov: './foliage_vid_combined.mov',
+          mov: './foliage_vid_combined_lite.mov',
           movFallback: './foliage_vid_combined.mov',
         },
       },
