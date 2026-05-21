@@ -67,7 +67,7 @@ let valScaling = 0.01;
 const defaultCountPerSide = 2;
 const FILTER_CACHE_HUE_STEP_DEG = 2;
 const FILTER_CACHE_BRIGHTNESS_STEP = 0.02;
-const HERO_VIDEO_PATH_DEFAULT = './hero_final_keyed.webm';
+const HERO_VIDEO_PATH_DEFAULT = './hero_final_keyed_lite.webm';
 const HERO_VIDEO_PATH_APPLE_SAFARI = './hero_final_foriOS.mov';
 const HERO_VIDEO_SOURCE_RUNTIME = {
   candidates: [],

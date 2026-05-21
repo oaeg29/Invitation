@@ -280,7 +280,7 @@ const PAGE_BACKGROUND_ALLOWED_MODES = new Set([
   PAGE_BACKGROUND_MODE_GRADIENT,
   PAGE_BACKGROUND_MODE_SOLID,
 ]);
-const HERO_VIDEO_PATH_DEFAULT = './hero_final_keyed.webm';
+const HERO_VIDEO_PATH_DEFAULT = './hero_final_keyed_lite.webm';
 const HERO_VIDEO_PATH_APPLE_SAFARI = './hero_final_foriOS.mov';
 const HERO_VIDEO_SOURCE_RUNTIME = {
   candidates: [],

@@ -33,9 +33,9 @@
     videoOverrides: {
     
       hero: {
-        webm: './hero_final_keyed.webm',
+        webm: './hero_final_keyed_lite.webm',
         webmFallback: './hero_final_keyed.webm',
-        mov: './hero_final_foriOS.mov',
+        mov: './hero_final_foriOS_lite.mov',
         movFallback: './hero_final_foriOS.mov',
       },
       foliage: {
