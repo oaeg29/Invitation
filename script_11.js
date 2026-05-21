@@ -378,6 +378,7 @@ const VIEWPORT_LAYOUT_MODE_DEBUG_BUTTON_ID = 'viewportModeDebugToggle';
 const VIEWPORT_LAYOUT_RELATIVE_ADJUSTABLE_CONTROLS_ID = 'viewportRelativeAdjustableControls';
 const VIEWPORT_LAYOUT_SCROLL_STAGE_ID = 'ios-scroll-stage';
 const SAFARI_TOP_TINT_SHIM_ID = 'safari-top-tint-shim';
+const SAFARI_BOTTOM_TINT_SHIM_ID = 'safari-bottom-tint-shim';
 const SAFARI_TOP_TINT_CSS_VAR = '--safari-top-tint';
 const SAFARI_TOP_TINT_SHIM_OPACITY_CSS_VAR = '--safari-top-tint-shim-opacity';
 const THEME_COLOR_META_NAME = 'theme-color';
@@ -1418,6 +1419,7 @@ let visualViewportHandlersInstalled = false;
 let viewportLayoutDebugToggleButton = null;
 let viewportRelativeAdjustableControls = null;
 let safariTopTintShimElement = null;
+let safariBottomTintShimElement = null;
 let lastSafariTopTint = '';
 let loadingScreenTopTintOverride = '';
 let themeColorMetaElement = null;
@@ -2053,6 +2055,24 @@ function ensureSafariTopTintShimElement() {
   }
   safariTopTintShimElement = element;
   return safariTopTintShimElement;
+}
+
+function ensureSafariBottomTintShimElement() {
+  if (!document || !document.body) {
+    return null;
+  }
+  if (safariBottomTintShimElement && safariBottomTintShimElement.parentNode === document.body) {
+    return safariBottomTintShimElement;
+  }
+  let element = document.getElementById(SAFARI_BOTTOM_TINT_SHIM_ID);
+  if (!element) {
+    element = document.createElement('div');
+    element.id = SAFARI_BOTTOM_TINT_SHIM_ID;
+    element.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(element);
+  }
+  safariBottomTintShimElement = element;
+  return safariBottomTintShimElement;
 }
 
 function setSafariTopTint(color) {
@@ -3163,12 +3183,18 @@ function shouldEnableSafariTopTintShim() {
   return override === true || config.enabled === true;
 }
 
+function shouldEnableSafariLiteBottomTintShim(topTintShimEnabled) {
+  return Boolean(topTintShimEnabled && isLiteModeActive() && isLikelySafariOnIOS());
+}
+
 function syncSafariTopTintShim() {
   if (!document || !document.body || !document.documentElement) {
     return;
   }
   ensureSafariTopTintShimElement();
+  ensureSafariBottomTintShimElement();
   const enabled = shouldEnableSafariTopTintShim();
+  const bottomShimEnabled = shouldEnableSafariLiteBottomTintShim(enabled);
   const experimentEnabled = shouldEnableViewportTopTintExperiment();
   const config = resolveSafariTopTintShimConfig();
   const topBarColorSyncConfig = resolveTopBarColorSyncConfig();
@@ -3183,6 +3209,7 @@ function syncSafariTopTintShim() {
   );
   document.body.classList.toggle('ios-safari-top-tint-shim', enabled);
   document.body.classList.toggle('ios-safari-top-tint-shim-experiment', enabled && experimentEnabled);
+  document.body.classList.toggle('ios-safari-lite-bottom-tint-shim', bottomShimEnabled);
   document.documentElement.classList.toggle('ios-safari-top-tint-fallback', enabled && experimentEnabled);
   if (shouldSyncThemeColor && typeof topTint === 'string' && topTint.trim().length > 0) {
     setDynamicThemeColor(topTint);

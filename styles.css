@@ -107,7 +107,27 @@ body[data-viewport-layout-mode="scrollstage"] {
   z-index: 2147483647;
 }
 
+/* Safari on iOS can sample the bottom chrome from viewport bottom pixels. */
+#safari-bottom-tint-shim {
+  display: none;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  min-width: 80vw;
+  height: 2px;
+  min-height: 2px;
+  background-color: var(--safari-top-tint, #000);
+  opacity: 1;
+  pointer-events: none;
+  z-index: 2147483647;
+}
+
 body.ios-safari-top-tint-shim #safari-top-tint-shim {
+  display: block;
+}
+
+body.ios-safari-lite-bottom-tint-shim #safari-bottom-tint-shim {
   display: block;
 }
 
