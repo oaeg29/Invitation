@@ -3019,12 +3019,14 @@ function ensureThemeColorMetaElement() {
   return themeColorMetaElement;
 }
 
-function setDynamicThemeColor(color) {
+function setDynamicThemeColor(color, options = null) {
+  const safeOptions = options && typeof options === 'object' ? options : null;
+  const force = Boolean(safeOptions && safeOptions.force === true);
   if (typeof color !== 'string') {
     return;
   }
   const trimmed = color.trim();
-  if (trimmed.length <= 0 || trimmed === lastThemeColor) {
+  if (trimmed.length <= 0 || (!force && trimmed === lastThemeColor)) {
     return;
   }
   const meta = ensureThemeColorMetaElement();
@@ -25109,7 +25111,12 @@ function commitLiteSwipeSectionFinalTintSync(targetSection, nowMs = performance.
     ? Number(nowMs)
     : performance.now();
   syncSectionStylingLayers(safeNowMs, targetFrame);
-  syncSafariTopTintColor();
+  const committedTint = syncSafariTopTintColor();
+  if (typeof committedTint === 'string' && committedTint.trim().length > 0) {
+    // Force a real meta mutation even when the color token is unchanged so
+    // Safari chrome doesn't stay latched to the previous transition tint.
+    setDynamicThemeColor(committedTint, { force: true });
+  }
 }
 
 function finalizeSwipeSectionTransition(targetIndex, direction, reason, swipeConfig = resolveSwipeSectionsConfig()) {
