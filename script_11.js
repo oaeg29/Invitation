@@ -25161,6 +25161,10 @@ function finalizeSwipeSectionTransition(targetIndex, direction, reason, swipeCon
       reason: typeof reason === 'string' && reason.length > 0 ? reason : 'swipe',
     });
   }
+  // Update dataset to incoming section ID before syncing tint, so browser samples correct color
+  if (sectionStylingBackgroundLayer && sectionStylingBackgroundLayer.dataset) {
+    sectionStylingBackgroundLayer.dataset.sectionStylingActiveSectionId = targetSection.id || '';
+  }
   commitLiteSwipeSectionFinalTintSync(targetSection, performance.now());
   renderScene({ skipAutoStart: true });
   if (typeof requestAnimationFrame === 'function') {
