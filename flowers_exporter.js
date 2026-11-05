@@ -85,7 +85,7 @@
       types: {
         lily: {
           method: 'sweep3',
-          spritePath: './lily_sprite.png',
+          spritePath: './lily_sprite.webp',
           spriteCellWidth: 44,
           spriteCellHeight: 44,
           spriteScale: 8.3333333,
@@ -104,7 +104,7 @@
           stamenAdditionalMode: 'rowList',
           stamenRowList: [2, 3, 4, 5, 6, 7, 8],
           closedUseMiddlePetalSprite: true,
-          closedSpritePath: './closed_lily.png',
+          closedSpritePath: './closed_lily.webp',
           closedSpriteCols: 8,
           closedSpriteRows: 1,
           closedSpriteScale: 4.1590909091,
@@ -157,12 +157,12 @@
           hoverSpeedRange: [2.2, 4.2],
         },
         blue: {
-          spritePath: './blue_sprite_2_upscaled.png',
+          spritePath: './blue_sprite_2_upscaled.webp',
           spritePathPool: [
-            './blue_sprite_2.png',
-            './blue_sprite_1.png',
-            './blue_sprite_3.png',
-            './blue_sprite.png',
+            './blue_sprite_2.webp',
+            './blue_sprite_1.webp',
+            './blue_sprite_3.webp',
+            './blue_sprite.webp',
           ],
           spriteCellWidth: 44,
           spriteCellHeight: 44,

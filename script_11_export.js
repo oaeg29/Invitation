@@ -3894,7 +3894,7 @@ function resolveHeroPlaybackGateConfig(configCandidate = CONFIG.heroPlaybackGate
       && safeOpenButtonArrowConfig.spritePath.trim().length > 0
     )
       ? safeOpenButtonArrowConfig.spritePath.trim()
-      : './arrow_1.png',
+      : './arrow_1.webp',
     centerXRatio: clamp(
       Number.isFinite(Number(safeOpenButtonArrowConfig.centerXRatio))
         ? Number(safeOpenButtonArrowConfig.centerXRatio)
@@ -4364,7 +4364,7 @@ function resolveCenterOverlayImageConfig(configCandidate = CONFIG.centerOverlayI
         && safeConfig.spritePath.trim().length > 0
       )
         ? safeConfig.spritePath.trim()
-        : './test_page.png'
+        : './test_page.webp'
     ),
     scale: Number.isFinite(Number(safeConfig.scale))
       ? Math.max(0, Number(safeConfig.scale))
@@ -10716,7 +10716,7 @@ function createHorizontallyFlippedTexture(image) {
 
 async function loadStemTexture() {
   try {
-    return await loadImage('./stem_2.5.png');
+    return await loadImage('./stem_2.5.webp');
   } catch (error) {
     console.warn(error.message + ' | Falling back to generated stem texture.');
     return createFallbackStemTexture();
@@ -10727,7 +10727,7 @@ async function loadLeafTexture(leavesConfig = CONFIG.leaves || {}) {
   const safeConfig = isPlainObjectLiteral(leavesConfig) ? leavesConfig : {};
   const spritePath = (typeof safeConfig.spritePath === 'string' && safeConfig.spritePath.length > 0)
     ? safeConfig.spritePath
-    : './leaves_new.png';
+    : './leaves_new.webp';
   try {
     return await loadImage(spritePath);
   } catch (error) {
@@ -11184,7 +11184,7 @@ async function loadFlowerSpriteIntoSystem() {
       lilyConfig && typeof lilyConfig.spritePath === 'string' && lilyConfig.spritePath.length > 0
     )
       ? lilyConfig.spritePath
-      : './lily_sprite.png';
+      : './lily_sprite.webp';
     await flowerSystem.loadSprite(spritePath);
     if (!__flowersLoggedSpriteLoadEnd) {
       __flowersLoggedSpriteLoadEnd = true;
@@ -13132,7 +13132,7 @@ function resolveLeavesConfig(leavesConfigCandidate = CONFIG.leaves || {}) {
   const deterministic = safeConfig.deterministic !== false;
   const spritePath = (typeof safeConfig.spritePath === 'string' && safeConfig.spritePath.length > 0)
     ? safeConfig.spritePath
-    : './leaves_new.png';
+    : './leaves_new.webp';
   const spriteCellWidth = Number.isFinite(Number(safeConfig.spriteCellWidth))
     ? Math.max(1, Number(safeConfig.spriteCellWidth))
     : 44;
@@ -14886,7 +14886,7 @@ function resolveSwipeSectionsFallbackOverlayPath() {
   ) {
     return centerOverlayConfig.spritePath.trim();
   }
-  return './test_page.png';
+  return './test_page.webp';
 }
 
 function sanitizeRsvpResponseValue(value, fallback = null) {
@@ -15576,7 +15576,7 @@ function resolveSwipeSectionsScrollHintConfig(configCandidate = {}) {
     spritePath: normalizeCenterOverlayImagePath(
       typeof safeConfig.spritePath === 'string' && safeConfig.spritePath.trim().length > 0
         ? safeConfig.spritePath.trim()
-        : './scroll_4_more.png',
+        : './scroll_4_more.webp',
     ),
     widthVideoHeightRatio: Number.isFinite(Number(safeConfig.widthVideoHeightRatio)) && Number(safeConfig.widthVideoHeightRatio) > 0
       ? Number(safeConfig.widthVideoHeightRatio)

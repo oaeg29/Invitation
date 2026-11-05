@@ -6,12 +6,12 @@
   const ALWAYS_SWAY_SIM_HZ = 24;
   const ALWAYS_SWAY_SIM_DT_SEC = 1 / ALWAYS_SWAY_SIM_HZ;
   const ALWAYS_SWAY_MAX_STEPS_PER_FRAME = 4;
-  const DEFAULT_LILY_SPRITE_PATH = './lily_sprite.png';
-  const DEFAULT_LILY_CLOSED_SPRITE_PATH = './closed_lily.png';
+  const DEFAULT_LILY_SPRITE_PATH = './lily_sprite.webp';
+  const DEFAULT_LILY_CLOSED_SPRITE_PATH = './closed_lily.webp';
   const DEFAULT_LILY_CLOSED_SPRITE_COLS = 8;
   const DEFAULT_LILY_CLOSED_SPRITE_ROWS = 1;
   const DEFAULT_LILY_CLOSED_SPRITE_SCALE = 4.1590909091;
-  const DEFAULT_BLUE_SPRITE_PATH = './blue_sprite_2_upscaled.png';
+  const DEFAULT_BLUE_SPRITE_PATH = './blue_sprite_2_upscaled.webp';
 
   function shouldDeferViewportHeavyResize() {
     return (

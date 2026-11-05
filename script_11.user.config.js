@@ -501,7 +501,7 @@
     },
     openButtonArrow: {
       enabled: true,
-      spritePath: './arrow_2.png',
+      spritePath: './arrow_2.webp',
       centerXRatio: 0.498,
       centerYRatio: 0.42,
       sizeRatio: 0.19, // width ratio against rendered video min(width,height)
@@ -702,7 +702,7 @@
 
   centerOverlayImage: {
     enabled: true,
-    spritePath: './page_1.6.png', // fallback/default page path; section pageIndex controls active page when swipeSections is enabled
+    spritePath: './page_1.6.webp', // fallback/default page path; section pageIndex controls active page when swipeSections is enabled
     scale: 0.38, // interpreted by scaleMode
     scaleMode: 'videoSizeRatio', // multiplier | videoSizeRatio
     offsetXPx: 0,
@@ -738,10 +738,10 @@
 
     // Ordered page list used by section.pageIndex (1-based).
     pages: [
-      './page_1.6.png',
-      './page_2.1.png',
-      './page_3.2.png',
-      './page_4.png',
+      './page_1.6.webp',
+      './page_2.1.webp',
+      './page_3.2.webp',
+      './page_4.webp',
     ],
     // Section count is derived from this array length.
     sections: [
@@ -801,7 +801,7 @@
             color: 'rgba(156, 179, 195, 0.85)',
             media: {
               type: 'image',
-              path: './section_2_bg.png',
+              path: './section_2_bg.webp',
               opacity: 0.6,
             },
           },
@@ -843,7 +843,7 @@
           enabled: true,
           text: 'View Location',
           link: 'https://www.google.com/maps/dir//Sonesta+Hotel+Tower+%26+Casino+Cairo%D8%8C+Sonesta+Cairo+Hotel%D8%8C+3+El+Tayaran+St,+Ash+Sharekat,+Nasr+City,+Cairo+Governorate+4450113%E2%80%AD/@30.0789591,31.314985,17z/data=!4m20!1m10!3m9!1s0x14583e4709298029:0x12ce28bf24f83939!2sSonesta+Hotel+Tower+%26+Casino+Cairo!5m2!4m1!1i2!8m2!3d30.0789591!4d31.3175599!16s%2Fg%2F1tdjn3ms!4m8!1m0!1m5!1m1!1s0x14583e4709298029:0x12ce28bf24f83939!2m2!1d31.3175599!2d30.0789591!3e0!5m1!1e4?entry=ttu&g_ep=EgoyMDI2MDUwMi4wIKXMDSoASAFQAw%3D%3D',
-          pngSrc: './loc_pin.png',
+          pngSrc: './loc_pin.webp',
           pngFit: 'contain',
           offsetXVideoHeightRatio: 0,
           offsetYVideoHeightRatio: 0.18,
@@ -886,7 +886,7 @@
             color: 'rgb(223, 205, 193)',
             media: {
               type: 'image',
-              path: './section_3_bg.png',
+              path: './section_3_bg.webp',
               opacity: 0.35,
             },
           },
@@ -929,7 +929,7 @@
             color: 'rgba(30, 42, 76, 1)',
             media: {
               type: 'image', // keep as image for now; switch to video type later without schema change
-              path: 'section_4_bg.png',
+              path: 'section_4_bg.webp',
               opacity: 0.8,
             },
           },
@@ -1006,7 +1006,7 @@
     },
     scrollHint: {
       enabled: true,
-      spritePath: './scroll_4_more.png',
+      spritePath: './scroll_4_more.webp',
       widthVideoHeightRatio: 0.07,
       scale: 2,
       offsetXVideoHeightRatio: 0,
@@ -1122,7 +1122,7 @@
         requireConfirmBeforeJump: true,
       },
       buttons: {
-        spritePath: './yes&no.png', // sprite-sheet path (2x2 default mapping: yes row0, no row1; unselected col0, selected col1)
+        spritePath: './yes&no.webp', // sprite-sheet path (2x2 default mapping: yes row0, no row1; unselected col0, selected col1)
         spriteCellWidth: 44,
         spriteCellHeight: 44,
         spriteScale: 8.3295454546,
@@ -1146,7 +1146,7 @@
           offsetYVideoHeightRatio: 0.2,
           widthVideoHeightRatio: 0.14,
           heightVideoHeightRatio: 0.07,
-          spritePath: 'confirm.png', // optional dedicated confirm sprite-sheet path; empty = fallback to default button sprite
+          spritePath: 'confirm.webp', // optional dedicated confirm sprite-sheet path; empty = fallback to default button sprite
           spriteCellWidth: 733,
           spriteCellHeight: 366.5,
           spriteScale: 1,
@@ -1419,7 +1419,7 @@
     types: {
       lily: {
         method: 'sweep3', // legacy | sweep | sweep2 | sweep3
-        spritePath: './lily_sprite.png',
+        spritePath: './lily_sprite.webp',
         spriteCellWidth: 44,
         spriteCellHeight: 44,
         spriteScale: 8.3333333,
@@ -1438,7 +1438,7 @@
         stamenAdditionalMode: 'rowList', // randomRows | rowList
         stamenRowList: [2,3,4,5,6,7,8], // 1-based rows used when stamenAdditionalMode='rowList'
         closedUseMiddlePetalSprite: true, // if true, closed lilies use the closed-lily sheet (random variant per flower)
-        closedSpritePath: './closed_lily.png',
+        closedSpritePath: './closed_lily.webp',
         closedSpriteCols: 8,
         closedSpriteRows: 1,
         closedSpriteScale: 4.1590909091,
@@ -1494,12 +1494,12 @@
         // NOTE: this fallback is shadowed at runtime by `spritePathPool[0]`.
         // Kept pointing at a real file so any future code path that reads
         // `spritePath` directly does not 404.
-        spritePath: './blue_sprite_2.png',
+        spritePath: './blue_sprite_2.webp',
         spritePathPool: [
-          './blue_sprite_2.png','./blue_sprite_1.png','./blue_sprite_3.png', './blue_sprite.png',
-          './blue_sprite_2.png'
+          './blue_sprite_2.webp','./blue_sprite_1.webp','./blue_sprite_3.webp', './blue_sprite.webp',
+          './blue_sprite_2.webp'
 
-          // './blue_sprite_4.2.png', './blue_sprite_5.png'
+          // './blue_sprite_4.2.webp', './blue_sprite_5.webp'
         ], // one full sprite sheet is picked per blue flower
         spriteCellWidth: 44,
         spriteCellHeight: 44,
@@ -1536,7 +1536,7 @@
   leaves: {
     enabled: true,
     deterministic: true,
-    spritePath: './leaves_new.png',
+    spritePath: './leaves_new.webp',
     spriteCellWidth: 44,
     spriteCellHeight: 45.819,
     spriteScale: 8.3333333,

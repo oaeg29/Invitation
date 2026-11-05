@@ -386,7 +386,7 @@ const CONFIG = {
     },
     openButtonArrow: {
       enabled: true,
-      spritePath: './arrow_2.png',
+      spritePath: './arrow_2.webp',
       centerXRatio: 0.498,
       centerYRatio: 0.42,
       sizeRatio: 0.19, // width ratio against rendered video min(width,height)
@@ -399,7 +399,7 @@ const CONFIG = {
 
   centerOverlayImage: {
     enabled: true,
-    spritePath: './test_page2.png',
+    spritePath: './test_page2.webp',
     scale: 0.25,
     offsetXPx: 0,
     offsetYPx: -80,
@@ -538,7 +538,7 @@ const CONFIG = {
     types: {
       lily: {
         method: 'sweep3', // legacy | sweep | sweep2 | sweep3
-        spritePath: './lily_sprite.png',
+        spritePath: './lily_sprite.webp',
         spriteCellWidth: 44,
         spriteCellHeight: 44,
         spriteScale: 8.3333333,
@@ -557,7 +557,7 @@ const CONFIG = {
         stamenAdditionalMode: 'rowList', // randomRows | rowList
         stamenRowList: [2,3,4,5,6,7,8], // 1-based rows used when stamenAdditionalMode='rowList'
         closedUseMiddlePetalSprite: true, // if true, closed lilies use the closed-lily sheet (random variant per flower)
-        closedSpritePath: './closed_lily.png',
+        closedSpritePath: './closed_lily.webp',
         closedSpriteCols: 8,
         closedSpriteRows: 1,
         closedSpriteScale: 4.1590909091,
@@ -595,12 +595,12 @@ const CONFIG = {
         hoverSpeedRange: [2.2, 4.2],
       },
       blue: {
-        spritePath: './blue_sprite_2_upscaled.png',
+        spritePath: './blue_sprite_2_upscaled.webp',
         spritePathPool: [
-          './blue_sprite_2.png','./blue_sprite_1.png','./blue_sprite_3.png', './blue_sprite.png',
-          './blue_sprite_2.png'
+          './blue_sprite_2.webp','./blue_sprite_1.webp','./blue_sprite_3.webp', './blue_sprite.webp',
+          './blue_sprite_2.webp'
 
-          // './blue_sprite_4.2.png', './blue_sprite_5.png'
+          // './blue_sprite_4.2.webp', './blue_sprite_5.webp'
         ], // one full sprite sheet is picked per blue flower
         spriteCellWidth: 44,
         spriteCellHeight: 44,
@@ -621,7 +621,7 @@ const CONFIG = {
   leaves: {
     enabled: true,
     deterministic: true,
-    spritePath: './leaves_new.png',
+    spritePath: './leaves_new.webp',
     spriteCellWidth: 44,
     spriteCellHeight: 45.819,
     spriteScale: 8.3333333,
@@ -1468,7 +1468,7 @@ function resolveHeroPlaybackGateConfig(configCandidate = CONFIG.heroPlaybackGate
       && safeOpenButtonArrowConfig.spritePath.trim().length > 0
     )
       ? safeOpenButtonArrowConfig.spritePath.trim()
-      : './arrow_1.png',
+      : './arrow_1.webp',
     centerXRatio: clamp(
       Number.isFinite(Number(safeOpenButtonArrowConfig.centerXRatio))
         ? Number(safeOpenButtonArrowConfig.centerXRatio)
@@ -1769,7 +1769,7 @@ function resolveCenterOverlayImageConfig(configCandidate = CONFIG.centerOverlayI
       && safeConfig.spritePath.trim().length > 0
     )
       ? safeConfig.spritePath.trim()
-      : './test_page.png',
+      : './test_page.webp',
     scale: Number.isFinite(Number(safeConfig.scale))
       ? Math.max(0, Number(safeConfig.scale))
       : 1,
@@ -5559,7 +5559,7 @@ function createHorizontallyFlippedTexture(image) {
 
 async function loadStemTexture() {
   try {
-    return await loadImage('./stem_2.5.png');
+    return await loadImage('./stem_2.5.webp');
   } catch (error) {
     console.warn(error.message + ' | Falling back to generated stem texture.');
     return createFallbackStemTexture();
@@ -5570,7 +5570,7 @@ async function loadLeafTexture(leavesConfig = CONFIG.leaves || {}) {
   const safeConfig = isPlainObjectLiteral(leavesConfig) ? leavesConfig : {};
   const spritePath = (typeof safeConfig.spritePath === 'string' && safeConfig.spritePath.length > 0)
     ? safeConfig.spritePath
-    : './leaves_new.png';
+    : './leaves_new.webp';
   try {
     return await loadImage(spritePath);
   } catch (error) {
@@ -5928,7 +5928,7 @@ async function loadFlowerSpriteIntoSystem() {
       lilyConfig && typeof lilyConfig.spritePath === 'string' && lilyConfig.spritePath.length > 0
     )
       ? lilyConfig.spritePath
-      : './lily_sprite.png';
+      : './lily_sprite.webp';
     await flowerSystem.loadSprite(spritePath);
   } catch (error) {
     console.warn(error.message + ' | Flowers disabled because sprite failed to load.');
@@ -6818,7 +6818,7 @@ function resolveLeavesConfig(leavesConfigCandidate = CONFIG.leaves || {}) {
   const deterministic = safeConfig.deterministic !== false;
   const spritePath = (typeof safeConfig.spritePath === 'string' && safeConfig.spritePath.length > 0)
     ? safeConfig.spritePath
-    : './leaves_new.png';
+    : './leaves_new.webp';
   const spriteCellWidth = Number.isFinite(Number(safeConfig.spriteCellWidth))
     ? Math.max(1, Number(safeConfig.spriteCellWidth))
     : 44;
